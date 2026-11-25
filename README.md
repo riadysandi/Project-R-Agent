@@ -23,8 +23,13 @@ irm https://<your-server-domain>/install | iex
 ```
 Enter your server URL, Deployment Token (from **Config Receiver**), and Asset Tag in the GUI.
 
+## Downloads
+Official pre-built Windows installers (`.exe` x64/x86) and Android APKs (`.apk`) are published on the [GitHub Releases](https://github.com/riadysandi/Project-R-Agent/releases) page.
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
 ## Code Signing & Verifiable Builds
-Windows release artifacts can be compiled directly from source via `.github/workflows/release-agent.yml` on GitHub-hosted `windows-latest` runners, supporting free open-source code signing via **SignPath Foundation** (`SIGNPATH_API_TOKEN` and `SIGNPATH_ORG_ID`).
+Windows release artifacts are compiled directly from source via [`.github/workflows/release-agent.yml`](.github/workflows/release-agent.yml) on GitHub-hosted `windows-latest` runners, with code signing via **SignPath Foundation** (`SIGNPATH_API_TOKEN`, `SIGNPATH_ORG_ID`, and `SIGNPATH_PROJECT_SLUG`). See [PRIVACY.md](PRIVACY.md) for telemetry and data handling details.
 
 ## License
 Released under the [MIT License](LICENSE).
