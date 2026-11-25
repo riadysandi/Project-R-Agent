@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Project R</string>
     <string name="device_admin_description">Pengelola kebijakan keamanan perangkat dan tata kelola aset IT Project R.</string>
+    <string name="accessibility_service_description">Mengizinkan kontrol sentuh jarak jauh yang disetujui pengguna selama sesi dukungan teknis Project R.</string>
 </resources>

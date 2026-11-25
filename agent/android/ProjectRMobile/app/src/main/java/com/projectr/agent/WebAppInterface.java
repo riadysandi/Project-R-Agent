@@ -259,7 +259,8 @@ public class WebAppInterface {
                         }
                     }
 
-                    // 3. Matikan Background Heartbeat Service
+                    // 3. Matikan Background Heartbeat & Remote Relay Service
+                    RemoteRelayClient.getInstance(activity).disconnect();
                     activity.stopService(new Intent(activity, HeartbeatService.class));
 
                     // 4. Bersihkan data preferensi lokal

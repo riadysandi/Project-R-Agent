@@ -45,6 +45,7 @@ public class HeartbeatService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        RemoteRelayClient.getInstance(this).ensureConnected();
         if (!isRunning) {
             isRunning = true;
             startHeartbeatLoop();
@@ -77,6 +78,8 @@ public class HeartbeatService extends Service {
             String token = prefs.getString("token", NetworkHelper.DEFAULT_TOKEN).trim();
             String tag = prefs.getString("asset_tag", "").trim();
             if (baseUrl.isEmpty() || token.isEmpty() || tag.isEmpty()) return;
+
+            RemoteRelayClient.getInstance(this).ensureConnected();
 
             JSONObject resp = NetworkHelper.sendHeartbeat(this, baseUrl, token, tag);
             if (resp != null) {
@@ -323,6 +326,7 @@ public class HeartbeatService extends Service {
     @Override
     public void onDestroy() {
         isRunning = false;
+        RemoteRelayClient.getInstance(this).disconnect();
         if (workerThread != null) {
             workerThread.interrupt();
         }
