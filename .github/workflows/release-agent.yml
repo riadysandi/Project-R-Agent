@@ -1,0 +1,216 @@
+﻿name: Build & Release Project R Agents (Windows & Android)
+
+on:
+  push:
+    branches:
+      - 'main'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish GitHub Release with Windows & Android binaries'
+        required: false
+        default: true
+        type: boolean
+      release_tag:
+        description: 'Override release tag (leave blank to auto-detect)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-agent-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.resolve.outputs.tag_name }}
+      should_release: ${{ steps.resolve.outputs.should_release }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Resolve Release Tag
+        id: resolve
+        shell: bash
+        run: |
+          if [[ "${{ inputs.release_tag }}" != "" ]]; then
+            TAG="${{ inputs.release_tag }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            WIN_VER=$(grep -Eo 'CurrentVersion\s*=\s*"[^"]+"' agent/windows/src/Common/Config.cs | head -n1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+            TAG="v${WIN_VER:-0.0.0}"
+          fi
+
+          SHOULD_RELEASE="false"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]] || [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ inputs.create_release }}" == "true" ]]; then
+            SHOULD_RELEASE="true"
+          fi
+
+          echo "tag_name=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "should_release=${SHOULD_RELEASE}" >> "$GITHUB_OUTPUT"
+
+  build-windows-agent:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Ensure Inno Setup 6
+        shell: powershell
+        run: |
+          $isccPaths = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe"
+          )
+          if (-not ($isccPaths | Where-Object { Test-Path $_ } | Select-Object -First 1)) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Compile x64 & x86 Windows Agent Suite
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\agent\windows\build.ps1"
+
+      - name: Stage Unsigned Windows Artifacts
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path "$env:GITHUB_WORKSPACE\dist-unsigned" -Force | Out-Null
+          $files = @(
+            "ProjectR-Agent-Setup-x64.exe",
+            "ProjectR-Agent-Setup-x86.exe",
+            "ProjectRAgent-x64.exe",
+            "ProjectRAgent-x86.exe",
+            "ProjectRManager-x64.exe",
+            "ProjectRManager-x86.exe",
+            "ProjectRRemoteAgent-x64.exe",
+            "ProjectRRemoteAgent-x86.exe",
+            "checksums.txt",
+            "manifest.json"
+          )
+          foreach ($f in $files) {
+            $src = Join-Path "$env:GITHUB_WORKSPACE\agent\windows\bin" $f
+            if (Test-Path $src) {
+              Copy-Item $src -Destination "$env:GITHUB_WORKSPACE\dist-unsigned\" -Force
+            }
+          }
+
+      - name: Upload Unsigned Windows Artifacts (for SignPath Origin Verification)
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: projectr-agent-unsigned
+          path: dist-unsigned/*
+
+      - name: Submit Signing Request to SignPath Foundation
+        if: ${{ vars.SIGNPATH_PROJECT_SLUG != '' }}
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist-signed
+
+      - name: Prepare Final Windows Release Stage
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path "$env:GITHUB_WORKSPACE\dist-windows-final" -Force | Out-Null
+          if (Test-Path "$env:GITHUB_WORKSPACE\dist-signed") {
+            Copy-Item "$env:GITHUB_WORKSPACE\dist-signed\*" -Destination "$env:GITHUB_WORKSPACE\dist-windows-final\" -Force
+            foreach ($meta in @("manifest.json", "checksums.txt")) {
+              $mPath = Join-Path "$env:GITHUB_WORKSPACE\dist-unsigned" $meta
+              if (Test-Path $mPath) {
+                Copy-Item $mPath -Destination "$env:GITHUB_WORKSPACE\dist-windows-final\" -Force
+              }
+            }
+          } else {
+            Copy-Item "$env:GITHUB_WORKSPACE\dist-unsigned\*" -Destination "$env:GITHUB_WORKSPACE\dist-windows-final\" -Force
+          }
+
+      - name: Upload Final Windows Stage
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: dist-windows-final/*
+
+  build-android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Accept Android SDK Licenses & Ensure SDK 35
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build Android Release APK
+        working-directory: agent/android/ProjectRMobile
+        run: gradle :app:assembleRelease --no-daemon
+
+      - name: Stage Android Release APK
+        shell: bash
+        run: |
+          mkdir -p dist-android
+          APK_SRC="agent/android/ProjectRMobile/app/build/outputs/apk/release/app-release.apk"
+          AND_VER=$(grep -E 'versionName' agent/android/ProjectRMobile/app/build.gradle | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+          cp "$APK_SRC" "dist-android/ProjectR-Mobile-Guardian-v${AND_VER:-latest}.apk"
+          cp "$APK_SRC" "dist-android/ProjectR-Mobile-Guardian.apk"
+
+      - name: Upload Final Android Stage
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: dist-android/*
+
+  publish-release:
+    needs: [meta, build-windows-agent, build-android-apk]
+    if: ${{ needs.meta.outputs.should_release == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows Release Assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-windows
+          path: release-assets
+
+      - name: Download Android Release Assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-android
+          path: release-assets
+
+      - name: Publish Combined GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag_name }}
+          name: Project R Agent ${{ needs.meta.outputs.tag_name }}
+          make_latest: true
+          generate_release_notes: true
+          files: release-assets/*
