@@ -193,6 +193,26 @@ func (a *Agent) connectAndRun() error {
 	doneChan := make(chan struct{})
 	go a.captureLoop(doneChan)
 
+	// Keep WebSocket alive across Cloudflare / NAT proxies with 25s pings
+	go func() {
+		ticker := time.NewTicker(25 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-doneChan:
+				return
+			case <-a.stopChan:
+				return
+			case <-ticker.C:
+				a.connMu.Lock()
+				if a.conn != nil {
+					_ = a.conn.WriteMessage(websocket.PingMessage, nil)
+				}
+				a.connMu.Unlock()
+			}
+		}
+	}()
+
 	// Main loop: Read incoming input commands from viewers
 	for {
 		msgType, data, err := conn.ReadMessage()

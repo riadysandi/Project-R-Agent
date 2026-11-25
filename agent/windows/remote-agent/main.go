@@ -25,7 +25,7 @@ var (
 )
 
 var (
-	version = "2.4.8"
+	version = "2.4.9"
 
 	serverFlag   = flag.String("server", "", "Project R Relay / Server URL")
 	deviceIDFlag = flag.String("device-id", "", "Device ID (defaults to hardware UUID or registry)")

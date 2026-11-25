@@ -18,6 +18,22 @@ namespace ProjectR.Agent.Common
         [DllImport("wtsapi32.dll", SetLastError = true)]
         private static extern bool WTSQueryUserToken(uint sessionId, out IntPtr phToken);
 
+        [DllImport("wtsapi32.dll", SetLastError = true)]
+        private static extern bool WTSEnumerateSessions(IntPtr hServer, int Reserved, int Version, out IntPtr ppSessionInfo, out int pCount);
+
+        [DllImport("wtsapi32.dll")]
+        private static extern void WTSFreeMemory(IntPtr pMemory);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WTS_SESSION_INFO
+        {
+            public uint SessionID;
+            public IntPtr pWinStationName;
+            public int State;
+        }
+
+        private const int WTSActive = 0;
+
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern bool DuplicateTokenEx(
             IntPtr hExistingToken,
@@ -170,20 +186,42 @@ namespace ProjectR.Agent.Common
                 }
                 catch { }
 
-                // 2. Query active user console session
+                // 2. Query active user console session, falling back to any active RDP/interactive session
                 uint activeSessionId = WTSGetActiveConsoleSessionId();
-                if (activeSessionId == 0xFFFFFFFF || activeSessionId == 0)
-                {
-                    return false;
-                }
-
-                // 4. Launch process into activeSessionId using CreateProcessAsUser
                 IntPtr hUserToken = IntPtr.Zero;
                 IntPtr hPrimaryToken = IntPtr.Zero;
 
                 try
                 {
-                    if (!WTSQueryUserToken(activeSessionId, out hUserToken))
+                    bool hasToken = activeSessionId != 0xFFFFFFFF && activeSessionId != 0 && WTSQueryUserToken(activeSessionId, out hUserToken);
+                    if (!hasToken)
+                    {
+                        IntPtr pSessionInfo = IntPtr.Zero;
+                        int sessionCount = 0;
+                        if (WTSEnumerateSessions(IntPtr.Zero, 0, 1, out pSessionInfo, out sessionCount) && pSessionInfo != IntPtr.Zero)
+                        {
+                            try
+                            {
+                                int dataSize = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
+                                for (int i = 0; i < sessionCount; i++)
+                                {
+                                    WTS_SESSION_INFO siInfo = (WTS_SESSION_INFO)Marshal.PtrToStructure(IntPtr.Add(pSessionInfo, i * dataSize), typeof(WTS_SESSION_INFO));
+                                    if (siInfo.SessionID > 0 && siInfo.State == WTSActive && WTSQueryUserToken(siInfo.SessionID, out hUserToken))
+                                    {
+                                        activeSessionId = siInfo.SessionID;
+                                        hasToken = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            finally
+                            {
+                                WTSFreeMemory(pSessionInfo);
+                            }
+                        }
+                    }
+
+                    if (!hasToken)
                     {
                         if (logger != null) logger("WTSQueryUserToken failed for Session " + activeSessionId + " (Error: " + Marshal.GetLastWin32Error() + ")");
                         return false;

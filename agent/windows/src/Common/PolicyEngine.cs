@@ -1098,12 +1098,35 @@ namespace ProjectR.Agent.Common
             }
             catch { }
 
-            // 3. Remove MONASys Run entry
+            // 3. Remove MONASys Run entries (HKLM, HKLM WOW64, and all loaded user hives in HKU)
             try
             {
                 using (RegistryKey rk = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
                 {
                     if (rk != null) rk.DeleteValue("MONASysAssetWarning", false);
+                }
+                using (RegistryKey rk32 = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    if (rk32 != null) rk32.DeleteValue("MONASysAssetWarning", false);
+                }
+                foreach (string sid in Registry.Users.GetSubKeyNames())
+                {
+                    try
+                    {
+                        using (RegistryKey urk = Registry.Users.OpenSubKey(sid + @"\SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+                        {
+                            if (urk != null) urk.DeleteValue("MONASysAssetWarning", false);
+                        }
+                    }
+                    catch { }
+                }
+                string commonStartup = Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup);
+                if (!string.IsNullOrEmpty(commonStartup) && Directory.Exists(commonStartup))
+                {
+                    foreach (string f in Directory.GetFiles(commonStartup, "*MONASys*"))
+                    {
+                        try { File.Delete(f); } catch { }
+                    }
                 }
             }
             catch { }
