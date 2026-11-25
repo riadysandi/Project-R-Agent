@@ -1,0 +1,24 @@
+﻿# Build outputs & binaries
+agent/windows/bin/*.exe
+agent/windows/bin/*.zip
+agent/windows/**/bin/
+agent/windows/**/obj/
+agent/windows/installer/Output/
+dist-*/
+release-assets/
+
+# Android Gradle & local SDK config
+agent/android/**/.gradle/
+agent/android/**/.idea/
+agent/android/**/build/
+agent/android/**/local.properties
+agent/android/**/*.iml
+agent/android/**/*.jks
+agent/android/**/*.keystore
+agent/android/**/signing.properties
+agent/android/**/google-services.json
+
+# OS / IDE clutter
+.DS_Store
+Thumbs.db
+*.log

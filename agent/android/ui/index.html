@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html class="dark" lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+  <title>Project R — Android Mobile Guardian Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface": "#070b14",
+            "surface-card": "#0b1326",
+            "surface-container": "#131b2e",
+            "surface-container-high": "#1e293b",
+            "primary": "#38bdf8",
+            "primary-glow": "rgba(56, 189, 248, 0.4)",
+            "secondary": "#10b981",
+            "secondary-glow": "rgba(16, 185, 129, 0.4)",
+            "error": "#ef4444",
+            "error-dark": "#7f1d1d",
+            "error-bg": "#450a0a"
+          },
+          fontFamily: {
+            sans: ["Inter", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+            display: ["Space Grotesk", "sans-serif"]
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background: radial-gradient(circle at 50% 10%, #0f172a 0%, #030712 100%);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+    }
+    /* Android Phone Frame Styling */
+    .phone-mockup {
+      width: 100%;
+      max-width: 420px;
+      min-height: 870px;
+      border-radius: 44px;
+      border: 8px solid #1e293b;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 40px rgba(56, 189, 248, 0.15);
+      position: relative;
+      overflow: hidden;
+      background-color: #0b1326;
+    }
+    .phone-notch {
+      width: 130px;
+      height: 24px;
+      background-color: #1e293b;
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      border-bottom-left-radius: 16px;
+      border-bottom-right-radius: 16px;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .camera-lens {
+      width: 10px;
+      height: 10px;
+      background-color: #020617;
+      border-radius: 50%;
+      border: 1px solid #334155;
+    }
+    .speaker-slot {
+      width: 36px;
+      height: 4px;
+      background-color: #334155;
+      border-radius: 2px;
+    }
+    .home-indicator {
+      width: 130px;
+      height: 4px;
+      background-color: rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+    }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="flex flex-col items-center justify-center p-4 md:py-8 text-slate-100 antialiased select-none">
+
+  <!-- Desktop Interactive Switcher Controls -->
+  <div class="mb-6 flex flex-col sm:flex-row items-center gap-3 bg-slate-900/80 backdrop-blur-md p-2.5 rounded-2xl border border-slate-800 shadow-2xl">
+    <span class="text-xs font-semibold text-slate-400 px-2 uppercase tracking-wider">Simulasi Mode Android:</span>
+    <div class="flex items-center gap-2">
+      <button id="btn-mode-normal" onclick="switchMode('normal')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/30">
+        <span class="material-symbols-outlined text-[16px]">verified_user</span>
+        Mode Normal (Terlindungi)
+      </button>
+      <button id="btn-mode-lock" onclick="switchMode('lock')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-slate-800 text-slate-300 hover:bg-red-500 hover:text-white">
+        <span class="material-symbols-outlined text-[16px]">lock_clock</span>
+        Mode Lockdown (Dikunci Admin)
+      </button>
+    </div>
+  </div>
+
+  <!-- Android Phone Mockup Frame -->
+  <div class="phone-mockup flex flex-col justify-between">
+    <!-- Camera Notch -->
+    <div class="phone-notch">
+      <div class="speaker-slot"></div>
+      <div class="camera-lens"></div>
+    </div>
+
+    <!-- Android Status Bar -->
+    <div class="pt-2 px-6 flex items-center justify-between text-[11px] font-mono text-slate-400 z-40">
+      <span id="live-time">14:32</span>
+      <div class="flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-[13px]">wifi</span>
+        <span class="material-symbols-outlined text-[13px]">signal_cellular_alt</span>
+        <span class="material-symbols-outlined text-[14px]">battery_5_bar</span>
+      </div>
+    </div>
+
+    <!-- SCREEN CONTAINER -->
+    <div class="flex-1 overflow-y-auto px-4 pt-3 pb-8 relative">
+
+      <!-- ========================================== -->
+      <!-- 1. SCREEN NORMAL: MAIN AGENT STATUS        -->
+      <!-- ========================================== -->
+      <div id="screen-normal" class="space-y-4">
+        
+        <!-- Header Sederhana -->
+        <header class="flex items-center justify-between w-full pt-1">
+          <div class="flex items-center space-x-2.5">
+            <div class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700 flex items-center justify-center text-sky-400 shadow-sm">
+              <span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">security</span>
+            </div>
+            <div class="flex flex-col">
+              <span class="font-display font-bold text-[17px] tracking-wider text-white">PROJECT R</span>
+              <span class="font-mono text-[10px] text-slate-400">Mobile Guardian v2.3</span>
+            </div>
+          </div>
+          <!-- Ping / Telemetry Indicator -->
+          <div class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-slate-800/70 border border-slate-700/60">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span class="font-mono text-[10px] font-semibold text-emerald-300">MS-HQ : 24ms</span>
+          </div>
+        </header>
+
+        <!-- Hero Status (Di Tengah Layar - Visual Centerpiece) -->
+        <section class="flex flex-col items-center justify-center text-center py-5 px-3 relative overflow-hidden rounded-2xl bg-slate-900/60 border border-slate-800">
+          <!-- Ambient Radial Emerald Glow Backing -->
+          <div class="absolute w-44 h-44 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none -top-4"></div>
+
+          <!-- Glowing Shield Avatar -->
+          <div class="relative flex items-center justify-center my-2">
+            <div class="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse"></div>
+            <div class="w-22 h-22 rounded-full bg-slate-800 flex items-center justify-center relative shadow-lg p-3">
+              <div class="w-16 h-16 rounded-full bg-slate-950 flex items-center justify-center border border-emerald-500/40">
+                <span class="material-symbols-outlined text-[38px] text-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.7)]" style="font-variation-settings: 'FILL' 1;">
+                  verified_user
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Status Text -->
+          <h1 class="font-display font-bold text-xl text-white tracking-tight mt-2">
+            PERANGKAT TERLINDUNGI
+          </h1>
+          <p class="text-xs text-slate-400 max-w-xs mt-1">
+            Detak jantung aktif terhubung ke server endpoint SecOps.
+          </p>
+
+          <!-- Telemetry Heartbeat Capsule -->
+          <div class="inline-flex items-center space-x-2 mt-3 px-3.5 py-1.5 rounded-full bg-slate-800/80 border border-slate-700">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span class="font-mono text-[10px] font-semibold text-emerald-300">
+              Heartbeat 60 detik (Online)
+            </span>
+          </div>
+        </section>
+
+        <!-- Kartu Info Aset Karyawan -->
+        <section class="w-full rounded-2xl bg-slate-900/70 border border-slate-800 p-4 space-y-3 shadow-md">
+          <div class="flex items-center justify-between pb-1">
+            <div class="flex items-center space-x-2">
+              <span class="material-symbols-outlined text-sky-400 text-[18px]">badge</span>
+              <span class="font-semibold text-sm text-white">Data Aset Karyawan</span>
+            </div>
+            <span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800">
+              REGISTERED
+            </span>
+          </div>
+
+          <!-- Data Rows -->
+          <div class="flex flex-col space-y-2">
+            <!-- Nama Pengguna -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60">
+              <div class="flex items-center space-x-2 text-slate-400">
+                <span class="material-symbols-outlined text-[16px]">person</span>
+                <span class="text-xs">Nama Pengguna</span>
+              </div>
+              <span class="text-xs font-semibold text-white">Sandi Riady</span>
+            </div>
+
+            <!-- NIK -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60">
+              <div class="flex items-center space-x-2 text-slate-400">
+                <span class="material-symbols-outlined text-[16px]">fingerprint</span>
+                <span class="text-xs">NIK Pegawai</span>
+              </div>
+              <span class="font-mono text-xs font-semibold text-sky-400">1980312026</span>
+            </div>
+
+            <!-- NOMOR ASET (DAPAT DIEDIT SEPERTI DI WINDOWS) -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/80 border border-emerald-500/40 hover:border-emerald-500 transition-colors group">
+              <div class="flex items-center space-x-2 text-slate-400">
+                <span class="material-symbols-outlined text-[16px] text-emerald-400">tag</span>
+                <span class="text-xs font-medium text-slate-300">Nomor Aset</span>
+              </div>
+              
+              <!-- Tag Value & Edit Trigger Button -->
+              <div class="flex items-center space-x-2">
+                <span id="display-asset-tag" class="font-mono text-xs font-bold text-emerald-300 tracking-wide">
+                  AST-PMA-2026-089
+                </span>
+                <button onclick="openEditTagModal()" title="Ubah Nomor Aset (seperti di Windows Agent)" class="p-1 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[14px]">edit</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Model HP -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60">
+              <div class="flex items-center space-x-2 text-slate-400">
+                <span class="material-symbols-outlined text-[16px]">smartphone</span>
+                <span class="text-xs">Perangkat Fisik</span>
+              </div>
+              <div class="flex items-center space-x-1.5">
+                <span class="text-xs text-white">Samsung Galaxy A54</span>
+                <span class="material-symbols-outlined text-emerald-400 text-[15px]" title="IMEI Terverifikasi">check_circle</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Live Health Mini Gauges -->
+        <section class="grid grid-cols-2 gap-2.5 w-full">
+          <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-3 flex flex-col space-y-0.5">
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-[9px] uppercase tracking-wider text-slate-400">ENCRYPTION</span>
+              <span class="material-symbols-outlined text-emerald-400 text-[14px]">lock</span>
+            </div>
+            <span class="font-display font-semibold text-xs text-white">AES-256 GCM</span>
+            <span class="font-mono text-[9px] text-slate-500">Hardware-backed</span>
+          </div>
+          <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-3 flex flex-col space-y-0.5">
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-[9px] uppercase tracking-wider text-slate-400">AGENT DAEMON</span>
+              <span class="material-symbols-outlined text-sky-400 text-[14px]">bolt</span>
+            </div>
+            <span class="font-display font-semibold text-xs text-white">Active Sync</span>
+            <span class="font-mono text-[9px] text-slate-500">0 Failures / 24h</span>
+          </div>
+        </section>
+
+        <!-- Action Button & Footer -->
+        <footer class="flex flex-col items-center w-full pt-2 space-y-2.5">
+          <!-- Manual Sync Trigger Button -->
+          <button id="sync-btn" onclick="handleManualSync(this)" class="w-full h-11 bg-sky-500 hover:bg-sky-400 active:scale-[0.98] text-slate-950 font-bold text-sm rounded-xl flex items-center justify-center space-x-2 shadow-lg shadow-sky-500/20 transition-all duration-150">
+            <span class="material-symbols-outlined text-[19px]" id="sync-icon">sync</span>
+            <span id="sync-text">Sinkronkan Sekarang</span>
+          </button>
+          
+          <!-- Bottom Footnote -->
+          <p class="text-[10px] text-slate-500 text-center font-medium">
+            Dikelola secara terpusat oleh IT Infrastructure PMA.
+          </p>
+        </footer>
+
+      </div>
+
+      <!-- ========================================== -->
+      <!-- 2. SCREEN LOCKDOWN: REMOTE LOCKDOWN WARNING -->
+      <!-- ========================================== -->
+      <div id="screen-lock" class="hidden space-y-3.5">
+        
+        <!-- Red Glowing Header Card -->
+        <div class="relative w-full rounded-2xl overflow-hidden bg-red-950/80 border border-red-800/80 shadow-2xl p-4">
+          
+          <!-- Top Alert Ticker -->
+          <div class="flex flex-col gap-1 mb-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="inline-block w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                <span class="font-mono text-[9px] uppercase text-red-300 tracking-wider font-bold">SEC-LEVEL 1 LOCKDOWN</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-full bg-slate-950 text-red-400 font-mono text-[9px] border border-red-900">
+                ENCRYPTED-HALT
+              </span>
+            </div>
+
+            <div class="flex items-center gap-1 mt-1">
+              <span class="material-symbols-outlined text-red-400 text-[18px]" style="font-variation-settings: 'FILL' 1;">warning</span>
+              <span class="font-display text-xs font-bold text-red-100 uppercase tracking-wide">EMERGENCY PROTOCOL ACTIVATED</span>
+            </div>
+
+            <div class="font-mono text-[9px] text-red-300 opacity-90">
+              Lock Event ID: LCK-PMA-9921 • Waktu: 14:32 WIB
+            </div>
+          </div>
+
+          <!-- Center Icon & Visual Hero -->
+          <div class="flex flex-col items-center justify-center my-2 text-center">
+            <div class="relative flex items-center justify-center w-20 h-20 rounded-full bg-slate-950/90 shadow-inner border border-red-500/40">
+              <div class="absolute inset-0 rounded-full bg-red-600/20 animate-pulse"></div>
+              <span class="material-symbols-outlined text-red-500" style="font-size: 42px; font-variation-settings: 'FILL' 1;">lock</span>
+            </div>
+
+            <!-- Screen Lockdown Title -->
+            <h1 class="font-display font-bold text-lg text-white mt-3 tracking-tight uppercase">
+              AKSES LAYAR DIKUNCI
+            </h1>
+            <p class="font-mono text-[10px] text-red-300 tracking-wider mt-0.5">
+              SOVEREIGN CONTROL OVERRIDE — AGENT HALT
+            </p>
+          </div>
+
+          <!-- Official Corporate Notice Card -->
+          <div class="bg-slate-950/85 rounded-xl p-3 border border-red-900/50 shadow-lg flex flex-col gap-2 mt-2">
+            <div class="flex items-start gap-2">
+              <span class="material-symbols-outlined text-red-400 text-[18px] mt-0.5">verified_user</span>
+              <div class="flex flex-col">
+                <span class="font-semibold text-xs text-white">Pemberitahuan Resmi IT Security</span>
+                <p class="text-[11px] text-slate-300 leading-relaxed mt-1">
+                  Perangkat ini adalah aset sah milik <strong class="text-white">PT Pinus Merah Abadi</strong>. Hak akses dinonaktifkan sementara secara terpusat oleh Administrator IT.
+                </p>
+              </div>
+            </div>
+
+            <!-- Sub-policy banner -->
+            <div class="bg-red-950/60 rounded-lg p-2 border border-red-800/40">
+              <div class="flex items-center gap-1.5 mb-0.5">
+                <span class="material-symbols-outlined text-red-400 text-[14px]">shield_locked</span>
+                <span class="font-mono text-[9px] text-red-200 uppercase font-bold">Kebijakan Keamanan Aktif</span>
+              </div>
+              <p class="text-[10px] text-slate-400 leading-normal">
+                Mode Keamanan Tingkat Tinggi aktif. Seluruh interaksi aplikasi dibekukan sampai otorisasi dipulihkan melalui konsol pusat.
+              </p>
+            </div>
+          </div>
+
+          <!-- Telemetry & Asset Metadata Card -->
+          <div class="bg-slate-900/80 rounded-xl p-3 mt-3 border border-slate-800">
+            <div class="font-mono text-[9px] uppercase tracking-wider text-slate-400 mb-1">
+              DETAIL ASET & INTEGRITAS NODE
+            </div>
+            <div class="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+              <div class="flex flex-col">
+                <span class="text-slate-400 text-[10px]">Pemilik Aset</span>
+                <span class="text-white font-semibold truncate">Sandi Riady</span>
+                <span class="font-mono text-[9px] text-slate-400">NIK: 1980312026</span>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-slate-400 text-[10px]">Nomor Aset</span>
+                <span id="display-asset-tag-lock" class="font-mono text-emerald-400 font-bold">AST-PMA-2026-089</span>
+                <span class="font-mono text-[9px] text-emerald-300">AGENT V2.3 (BOUND)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Ping Bar -->
+          <div class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-950/60 border border-slate-800 mt-2">
+            <div class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-emerald-400 text-[14px]">satellite_alt</span>
+              <span class="font-mono text-[9px] text-slate-400">KONEKSI KONSOL PUSAT</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="font-mono text-[9px] text-emerald-300">SYNC ACTIVE (12ms)</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Emergency Action & Contact Section -->
+        <div class="flex flex-col gap-2.5 pt-1">
+          <!-- Emergency Call Trigger -->
+          <a href="tel:+622150881234" class="w-full bg-red-600 hover:bg-red-500 active:scale-[0.98] text-white py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-xl shadow-red-600/30 font-bold text-sm transition-all">
+            <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">phone_in_talk</span>
+            <span>Hubungi IT Support</span>
+          </a>
+
+          <!-- Secondary Emergency Contact Panel -->
+          <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-3 flex flex-col gap-1.5">
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-[9px] text-slate-400 uppercase font-bold tracking-wider">Jalur Bantuan IT Enterprise</span>
+              <span class="material-symbols-outlined text-slate-400 text-[15px]">support_agent</span>
+            </div>
+            <div class="flex flex-col gap-1 mt-0.5">
+              <div class="flex items-center gap-2 text-white">
+                <span class="material-symbols-outlined text-sky-400 text-[16px]">call</span>
+                <span class="font-mono text-xs font-semibold text-sky-300">+62 21 5088 1234 (Ext. 404)</span>
+              </div>
+              <div class="flex items-center gap-2 text-slate-400">
+                <span class="material-symbols-outlined text-[16px]">mail</span>
+                <span class="text-[11px] truncate text-slate-300">support@example.com</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Security Notice -->
+          <div class="bg-slate-950/70 rounded-lg p-2.5 border border-slate-800/80 flex items-start gap-2">
+            <span class="material-symbols-outlined text-red-400 text-[15px] mt-0.5">gavel</span>
+            <p class="text-[10px] text-slate-400 leading-normal">
+              Sistem Keamanan Perangkat ITAM & MDM. Percobaan bypass otorisasi atau flash firmware akan dicatat dan dilaporkan otomatis ke server.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Android Gesture Home Bar -->
+    <div class="home-indicator"></div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL: EDIT NOMOR ASET (PERSIS SEPERTI DI WINDOWS AGENT)       -->
+  <!-- ============================================================== -->
+  <div id="modal-edit-tag" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-2xl p-5 shadow-2xl relative space-y-4">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-emerald-400 text-[20px]">edit_note</span>
+          <h3 class="font-display font-bold text-base text-white">Ubah Nomor Aset</h3>
+        </div>
+        <button onclick="closeEditTagModal()" class="text-slate-400 hover:text-white transition-colors">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <!-- Description -->
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Sesuaikan nomor tag inventaris fisik perangkat ini (sama seperti di <i>Project R Windows Agent Manager</i>).
+      </p>
+
+      <!-- Input Field -->
+      <div class="space-y-1.5">
+        <label class="font-mono text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Nomor Aset Baru (Asset Tag):</label>
+        <div class="relative">
+          <input type="text" id="input-asset-tag" value="AST-PMA-2026-089" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3.5 py-2.5 font-mono text-sm text-emerald-300 font-bold outline-none transition-all" placeholder="Contoh: AST-PMA-2026-090" />
+          <span class="material-symbols-outlined absolute right-3 top-2.5 text-slate-500 text-[18px]">qr_code</span>
+        </div>
+        <span class="text-[10px] text-slate-500">Nomor ini akan otomatis disinkronkan ke Web Portal Project R saat ditekan Simpan.</span>
+      </div>
+
+      <!-- Modal Action Buttons -->
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button onclick="closeEditTagModal()" class="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors">
+          Batal
+        </button>
+        <button onclick="saveAssetTag()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all">
+          <span class="material-symbols-outlined text-[16px]">save</span>
+          Simpan & Sinkronkan
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-6 bg-slate-900 border border-emerald-500/60 text-white px-4 py-2.5 rounded-xl shadow-2xl z-50 transform translate-y-24 opacity-0 transition-all duration-300 flex items-center gap-2">
+    <span class="material-symbols-outlined text-emerald-400 text-[18px]">check_circle</span>
+    <span id="toast-msg" class="text-xs font-semibold text-slate-200">Nomor Aset berhasil diperbarui!</span>
+  </div>
+
+  <!-- JavaScript Interactivity -->
+  <script>
+    // Live Clock Update
+    function updateClock() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      document.getElementById('live-time').textContent = `${hours}:${minutes}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Mode Switcher (Normal vs Lockdown)
+    function switchMode(mode) {
+      const screenNormal = document.getElementById('screen-normal');
+      const screenLock = document.getElementById('screen-lock');
+      const btnNormal = document.getElementById('btn-mode-normal');
+      const btnLock = document.getElementById('btn-mode-lock');
+
+      if (mode === 'normal') {
+        screenNormal.classList.remove('hidden');
+        screenLock.classList.add('hidden');
+        btnNormal.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/30";
+        btnLock.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-slate-800 text-slate-300 hover:bg-red-500 hover:text-white";
+      } else {
+        screenNormal.classList.add('hidden');
+        screenLock.classList.remove('hidden');
+        btnLock.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-red-600 text-white shadow-lg shadow-red-600/30";
+        btnNormal.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-slate-800 text-slate-300 hover:bg-emerald-500 hover:text-slate-950";
+      }
+    }
+
+    // Modal Edit Nomor Aset
+    function openEditTagModal() {
+      const currentTag = document.getElementById('display-asset-tag').textContent.trim();
+      document.getElementById('input-asset-tag').value = currentTag;
+      document.getElementById('modal-edit-tag').classList.remove('hidden');
+      document.getElementById('input-asset-tag').focus();
+    }
+
+    function closeEditTagModal() {
+      document.getElementById('modal-edit-tag').classList.add('hidden');
+    }
+
+    function saveAssetTag() {
+      const newTag = document.getElementById('input-asset-tag').value.trim();
+      if (!newTag) {
+        alert('Nomor aset tidak boleh kosong.');
+        return;
+      }
+
+      // Update in normal screen & lock screen
+      document.getElementById('display-asset-tag').textContent = newTag;
+      document.getElementById('display-asset-tag-lock').textContent = newTag;
+
+      closeEditTagModal();
+      showToast(`Nomor Aset diubah ke ${newTag} & tersimpan!`);
+    }
+
+    // Toast Helper
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-msg');
+      toastMsg.textContent = message;
+
+      toast.classList.remove('translate-y-24', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-24', 'opacity-0');
+      }, 2500);
+    }
+
+    // Manual Sync Button Handler
+    function handleManualSync(button) {
+      const icon = document.getElementById('sync-icon');
+      const label = document.getElementById('sync-text');
+
+      if (button.dataset.loading === 'true') return;
+
+      button.dataset.loading = 'true';
+      icon.classList.add('animate-spin');
+      label.innerText = 'Menyinkronkan...';
+      button.classList.add('opacity-80');
+
+      setTimeout(() => {
+        icon.classList.remove('animate-spin');
+        icon.innerText = 'check';
+        label.innerText = 'Sinkron Berhasil';
+
+        showToast('Sinkronisasi data ke server Project R sukses!');
+
+        setTimeout(() => {
+          icon.innerText = 'sync';
+          label.innerText = 'Sinkronkan Sekarang';
+          button.classList.remove('opacity-80');
+          button.dataset.loading = 'false';
+        }, 2000);
+      }, 1200);
+    }
+  </script>
+</body>
+</html>

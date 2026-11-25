@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html class="dark" lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Project R Mobile Guardian</title>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface": "#070b14",
+            "surface-card": "#0b1326",
+            "surface-container": "#131b2e",
+            "surface-container-high": "#1e293b",
+            "primary": "#38bdf8",
+            "secondary": "#10b981",
+            "error": "#ef4444"
+          },
+          fontFamily: {
+            sans: ["Inter", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+            display: ["Space Grotesk", "sans-serif"]
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background-color: #0b1326;
+      color: #dae2fd;
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      overscroll-behavior: none;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+    .pb-safe {
+      padding-bottom: max(env(safe-area-inset-bottom, 16px), 16px);
+    }
+    .pt-safe {
+      padding-top: max(env(safe-area-inset-top, 16px), 16px);
+    }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen pt-safe pb-safe px-4 select-none justify-between">
+
+  <!-- ======================================================== -->
+  <!-- VIEW 1: MAIN DASHBOARD (STITCH DESIGN - FULL BLEED)      -->
+  <!-- ======================================================== -->
+  <div id="view-dashboard" class="flex flex-col flex-1 justify-between space-y-4">
+
+    <!-- 1. HEADER SEDERHANA -->
+    <header class="flex items-center justify-between w-full pt-1">
+      <div class="flex items-center space-x-2.5">
+        <img src="img/logo.png" alt="Project R Logo" class="w-8 h-8 rounded-lg border border-sky-500/40 shadow-sm object-contain bg-slate-900 p-0.5" />
+        <div class="flex flex-col">
+          <span class="font-display font-bold text-base tracking-wider text-white">PROJECT R</span>
+          <span id="header-device-info" class="font-mono text-[10px] text-slate-400">Mobile Guardian v2.3</span>
+        </div>
+      </div>
+      
+      <!-- Right Controls: Ping & Settings -->
+      <div class="flex items-center space-x-2">
+        <div id="status-pill" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700/60">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="status-pill-text" class="font-mono text-[10px] font-semibold text-emerald-300">MS-HQ : 24ms</span>
+        </div>
+        <button onclick="openSettings()" title="Pengaturan Server" class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition-all">
+          <span class="material-symbols-outlined text-[18px]">settings</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. HERO STATUS (CENTERPIECE VISUAL DENGAN TAMENG) -->
+    <section class="flex flex-col items-center justify-center text-center py-5 px-3 relative overflow-hidden rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-lg">
+      <!-- Glow Backing -->
+      <div class="absolute w-44 h-44 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none -top-4"></div>
+
+      <!-- Glowing Shield Avatar -->
+      <div class="relative flex items-center justify-center my-2">
+        <div class="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse"></div>
+        <div class="w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center relative shadow-lg">
+          <div class="w-16 h-16 rounded-full bg-slate-950 flex items-center justify-center border border-emerald-500/40">
+            <span class="material-symbols-outlined text-[36px] text-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.7)]" style="font-variation-settings: 'FILL' 1;">
+              verified_user
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Status Text -->
+      <h1 id="hero-title" class="font-display font-bold text-xl text-white tracking-tight mt-2">
+        PERANGKAT TERLINDUNGI
+      </h1>
+      <p id="hero-desc" class="text-xs text-slate-400 max-w-xs mt-1">
+        Detak jantung aktif terhubung ke server endpoint SecOps.
+      </p>
+
+      <!-- Telemetry Heartbeat Capsule -->
+      <div class="inline-flex items-center space-x-2 mt-3 px-3.5 py-1.5 rounded-full bg-slate-800/80 border border-slate-700">
+        <span class="relative flex h-2 w-2" id="hero-heartbeat-dot">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span id="hero-heartbeat-text" class="font-mono text-[10px] font-semibold text-emerald-300">
+          Heartbeat 60 detik (Online)
+        </span>
+      </div>
+    </section>
+
+    <!-- 3. KARTU INFO ASET & PERANGKAT -->
+    <section class="w-full rounded-2xl bg-slate-900/70 border border-slate-800 p-4 space-y-3 shadow-md">
+      <div class="flex items-center justify-between pb-1">
+        <div class="flex items-center space-x-2">
+          <span class="material-symbols-outlined text-sky-400 text-[18px]">badge</span>
+          <span class="font-semibold text-sm text-white">Data Aset Perangkat</span>
+        </div>
+        <span id="badge-enrolled" class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800">
+          REGISTERED
+        </span>
+      </div>
+
+      <!-- Data Rows -->
+      <div class="flex flex-col space-y-2">
+        <!-- Nomor Aset (Editable) -->
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/80 border border-emerald-500/40 hover:border-emerald-500 transition-colors">
+          <div class="flex items-center space-x-2 text-slate-400">
+            <span class="material-symbols-outlined text-[16px] text-emerald-400">tag</span>
+            <span class="text-xs font-medium text-slate-300">Nomor Aset (TAG)</span>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span id="display-asset-tag" class="font-mono text-xs font-bold text-emerald-300 tracking-wide">
+              -
+            </span>
+            <button onclick="openEditTagModal()" title="Ubah Nomor Aset" class="p-1 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all flex items-center justify-center">
+              <span class="material-symbols-outlined text-[14px]">edit</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Perangkat Fisik (Hardware Model) -->
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60">
+          <div class="flex items-center space-x-2 text-slate-400">
+            <span class="material-symbols-outlined text-[16px]">smartphone</span>
+            <span class="text-xs">Model Perangkat</span>
+          </div>
+          <div class="flex items-center space-x-1.5">
+            <span id="display-device-model" class="text-xs font-semibold text-white truncate max-w-[170px]">-</span>
+            <span class="material-symbols-outlined text-emerald-400 text-[15px]" title="Terverifikasi">check_circle</span>
+          </div>
+        </div>
+
+        <!-- Sistem Operasi -->
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60">
+          <div class="flex items-center space-x-2 text-slate-400">
+            <span class="material-symbols-outlined text-[16px]">terminal</span>
+            <span class="text-xs">Sistem Operasi</span>
+          </div>
+          <span id="display-os-version" class="font-mono text-xs font-semibold text-sky-400">-</span>
+        </div>
+
+        <!-- ID Perangkat -->
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60">
+          <div class="flex items-center space-x-2 text-slate-400">
+            <span class="material-symbols-outlined text-[16px]">fingerprint</span>
+            <span class="text-xs">ID Perangkat</span>
+          </div>
+          <span id="display-device-id" class="font-mono text-[10px] text-slate-400 truncate max-w-[170px]">-</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. LIVE HEALTH GAUGES -->
+    <section class="grid grid-cols-2 gap-2.5 w-full">
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-3 flex flex-col space-y-0.5">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-[9px] uppercase tracking-wider text-slate-400">ENCRYPTION</span>
+          <span class="material-symbols-outlined text-emerald-400 text-[14px]">lock</span>
+        </div>
+        <span class="font-display font-semibold text-xs text-white">AES-256 GCM</span>
+        <span class="font-mono text-[9px] text-slate-500">Hardware-backed</span>
+      </div>
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-3 flex flex-col space-y-0.5">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-[9px] uppercase tracking-wider text-slate-400">AGENT DAEMON</span>
+          <span class="material-symbols-outlined text-sky-400 text-[14px]">bolt</span>
+        </div>
+        <span class="font-display font-semibold text-xs text-white">Active Sync</span>
+        <span class="font-mono text-[9px] text-slate-500">0 Failures / 24h</span>
+      </div>
+    </section>
+
+    <!-- 5. TOMBOL UTAMA & FOOTNOTE -->
+    <footer class="flex flex-col items-center w-full pt-1 space-y-2">
+      <button id="sync-btn" onclick="syncNow()" class="w-full h-12 bg-sky-500 hover:bg-sky-400 active:scale-[0.98] text-slate-950 font-bold text-sm rounded-xl flex items-center justify-center space-x-2 shadow-lg shadow-sky-500/20 transition-all duration-150">
+        <span class="material-symbols-outlined text-[20px]" id="sync-icon">sync</span>
+        <span id="sync-text">Sinkronkan Sekarang</span>
+      </button>
+      <p class="text-[10px] text-slate-500 text-center font-medium">
+        Dikelola secara terpusat oleh IT Infrastructure PMA.
+      </p>
+    </footer>
+
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- VIEW 2: PENGATURAN SERVER & TOKEN (DENGAN TOMBOL KEMBALI)-->
+  <!-- ======================================================== -->
+  <div id="view-settings" class="flex flex-col flex-1 space-y-4 hidden overflow-y-auto pb-8">
+    
+    <div class="space-y-4">
+      <!-- Header dengan Tombol Kembali -->
+      <div class="flex items-center space-x-3 border-b border-slate-800 pb-3 pt-1">
+        <button onclick="closeSettings()" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition-all">
+          <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+        </button>
+        <div class="flex flex-col">
+          <h2 class="text-sm font-bold text-white">Pengaturan Koneksi &amp; Aset</h2>
+          <p class="text-[10px] text-slate-400">Konfigurasi endpoint server dan identitas aset perangkat</p>
+        </div>
+      </div>
+
+      <!-- Form Inputs -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-4 shadow-xl">
+        <!-- Field 1: URL Server -->
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+            <span class="material-symbols-outlined text-sky-400 text-[15px]">dns</span>
+            <span>URL Endpoint Server:</span>
+          </label>
+          <input type="text" id="settings-server-url" value="" 
+                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-sky-400 font-mono outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all" 
+                 placeholder="Contoh: https://mdm.example.com" />
+          <p class="text-[10px] text-slate-500">Domain atau IP server web Project R.</p>
+        </div>
+
+        <!-- Field 2: Deployment Token -->
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+            <span class="material-symbols-outlined text-emerald-400 text-[15px]">key</span>
+            <span>Deployment Token:</span>
+          </label>
+          <input type="password" id="settings-token" value="" 
+                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-emerald-400 font-mono outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all" 
+                 placeholder="PR-AGT-XXXXXXXXXX" />
+          <p class="text-[10px] text-slate-500">Salin token dari menu Config Receiver di server Project R.</p>
+        </div>
+
+        <!-- Field 3: Asset Tag -->
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+            <span class="material-symbols-outlined text-amber-400 text-[15px]">label</span>
+            <span>Nomor Asset TAG Perangkat:</span>
+          </label>
+          <input type="text" id="settings-tag" value="" 
+                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-amber-400 font-mono font-bold outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all uppercase" 
+                 placeholder="Contoh: AST-2026-001" />
+          <p class="text-[10px] text-slate-500">Nomor barcode atau tag inventaris unik perangkat ini.</p>
+        </div>
+
+        <!-- Save Button -->
+        <div class="pt-2">
+          <button id="btn-save-settings" onclick="saveSettings()" 
+                  class="w-full h-11 bg-sky-500 hover:bg-sky-400 active:scale-[0.98] text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center space-x-2 shadow-lg shadow-sky-500/20 transition-all duration-150">
+            <span class="material-symbols-outlined text-[18px]">cloud_upload</span>
+            <span>Simpan &amp; Hubungkan Perangkat</span>
+          </button>
+        </div>
+      </div>
+
+      <button onclick="closeSettings()" 
+              class="w-full py-2.5 text-xs text-slate-400 hover:text-white transition-all font-medium">
+        Batal / Kembali ke Dashboard
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: EDIT NOMOR ASSET TAG                              -->
+  <!-- ======================================================== -->
+  <div id="modal-edit-tag" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-2xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center space-x-2">
+          <span class="material-symbols-outlined text-emerald-400 text-[20px]">edit</span>
+          <h3 class="text-sm font-bold text-white">Ubah Nomor Asset (TAG)</h3>
+        </div>
+        <button onclick="closeEditTagModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs text-slate-300 font-medium">Nomor Asset Baru:</label>
+        <input type="text" id="modal-input-tag" value="" 
+               class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-emerald-400 outline-none focus:border-emerald-500 uppercase" 
+               placeholder="Contoh: AST-2026-090" />
+        <p class="text-[10px] text-slate-500">Nomor tag akan otomatis disinkronkan ke Web Portal.</p>
+      </div>
+
+      <div class="flex space-x-2 pt-2">
+        <button onclick="closeEditTagModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl">
+          Batal
+        </button>
+        <button onclick="saveModalTag()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-emerald-900/30">
+          Simpan TAG
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- VIEW 3: FULLSCREEN LOCKDOWN (REMOTE COMMAND IT ONLY)     -->
+  <!-- ======================================================== -->
+  <div id="view-lockdown" class="fixed inset-0 bg-red-950 z-50 flex flex-col p-6 items-center justify-between text-white hidden overflow-y-auto">
+    <div class="w-full text-center space-y-2 pt-4">
+      <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-red-900/80 border border-red-500 text-red-200 text-xs font-mono font-bold animate-pulse">
+        <span>⚠️ SEC-LEVEL 1 LOCKDOWN ACTIVATED</span>
+      </div>
+      <div class="w-16 h-16 rounded-full bg-red-900/40 border-2 border-red-500 flex items-center justify-center mx-auto my-2 shadow-[0_0_25px_rgba(239,68,68,0.5)]">
+        <span class="material-symbols-outlined text-[36px] text-red-400" style="font-variation-settings: 'FILL' 1;">lock</span>
+      </div>
+      <h1 class="font-display text-xl font-bold tracking-tight text-white">AKSES LAYAR DIKUNCI</h1>
+      <p class="text-xs text-red-200 max-w-xs mx-auto leading-relaxed">
+        Perangkat ini adalah aset sah milik <b>PT Pinus Merah Abadi</b>. Hak akses dinonaktifkan sementara secara terpusat oleh Administrator IT.
+      </p>
+    </div>
+
+    <!-- PIN UNLOCK CARD -->
+    <div class="w-full max-w-sm bg-black/60 border border-red-700/80 rounded-2xl p-4 space-y-3 shadow-2xl backdrop-blur-sm my-3">
+      <div class="flex items-center space-x-2 text-xs font-semibold text-red-300">
+        <span class="material-symbols-outlined text-[18px]">key</span>
+        <span>Buka Kunci Layar (Otorisasi IT / PIN)</span>
+      </div>
+      <div class="space-y-1.5">
+        <div class="relative flex items-center">
+          <input type="password" id="input-unlock-pin" placeholder="Masukkan PIN Unlock..."
+                 class="w-full bg-red-950/90 border border-red-700 rounded-xl px-3.5 py-2.5 pr-10 text-sm text-white placeholder-red-400/50 focus:outline-none focus:border-red-400 font-mono tracking-widest text-center"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+          <button type="button" onclick="togglePinVisibility()" class="absolute right-3 text-red-400 hover:text-white focus:outline-none">
+            <span id="pin-eye-icon" class="material-symbols-outlined text-[20px]">visibility</span>
+          </button>
+        </div>
+        <p id="unlock-error-msg" class="text-[11px] text-red-300 hidden text-center font-medium"></p>
+      </div>
+      <button id="btn-submit-unlock" onclick="submitUnlockPin()" class="w-full py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-lg flex items-center justify-center space-x-2 transition-all">
+        <span class="material-symbols-outlined text-[18px]">lock_open</span>
+        <span id="btn-submit-unlock-text">Buka Kunci Layar</span>
+      </button>
+    </div>
+
+    <div class="w-full max-w-sm bg-black/40 border border-red-900/80 rounded-2xl p-3.5 text-xs space-y-1.5 font-mono mb-2">
+      <div class="flex justify-between">
+        <span class="text-red-300">Nomor Aset:</span>
+        <span id="lock-tag" class="text-amber-400 font-bold">-</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-red-300">ID Perangkat:</span>
+        <span id="lock-device-id" class="text-white">-</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-red-300">Koneksi Server:</span>
+        <span class="text-emerald-400">SYNC ACTIVE</span>
+      </div>
+    </div>
+
+    <div class="w-full max-w-sm space-y-2 pb-4">
+      <button onclick="callHelpdesk()" class="w-full py-2.5 bg-red-900/60 hover:bg-red-800/80 border border-red-700/80 text-red-100 font-medium text-xs rounded-xl shadow flex items-center justify-center space-x-2">
+        <span class="material-symbols-outlined text-[16px]">call</span>
+        <span>Hubungi IT Support (+62 21 5088 1234)</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="fixed bottom-6 left-4 right-4 bg-slate-900 border border-slate-700 text-white text-xs px-4 py-3 rounded-xl shadow-2xl transition-all transform translate-y-24 opacity-0 pointer-events-none flex items-center space-x-2.5 z-50">
+    <span id="toast-icon">ℹ️</span>
+    <span id="toast-text" class="flex-1 font-medium">Notifikasi</span>
+  </div>
+
+  <script>
+    let cachedConfig = {};
+
+    function showToast(message, isSuccess = true) {
+      const toast = document.getElementById('toast');
+      const text = document.getElementById('toast-text');
+      const icon = document.getElementById('toast-icon');
+      text.textContent = message;
+      icon.textContent = isSuccess ? '✅' : '⚠️';
+      toast.classList.remove('translate-y-24', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        toast.classList.add('translate-y-24', 'opacity-0');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+      }, 3500);
+    }
+
+    function openSettings() {
+      document.getElementById('view-dashboard').classList.add('hidden');
+      document.getElementById('view-settings').classList.remove('hidden');
+    }
+
+    function closeSettings() {
+      document.getElementById('view-settings').classList.add('hidden');
+      document.getElementById('view-dashboard').classList.remove('hidden');
+    }
+
+    function openEditTagModal() {
+      const current = document.getElementById('display-asset-tag').textContent.trim();
+      document.getElementById('modal-input-tag').value = (current !== '-') ? current : '';
+      document.getElementById('modal-edit-tag').classList.remove('hidden');
+      document.getElementById('modal-input-tag').focus();
+    }
+
+    function closeEditTagModal() {
+      document.getElementById('modal-edit-tag').classList.add('hidden');
+    }
+
+    function saveModalTag() {
+      const tag = document.getElementById('modal-input-tag').value.trim();
+      if (!tag) {
+        showToast('Nomor Asset TAG wajib diisi!', false);
+        return;
+      }
+      closeEditTagModal();
+      if (window.AndroidBridge && typeof window.AndroidBridge.saveAssetTag === 'function') {
+        window.AndroidBridge.saveAssetTag(tag);
+      }
+    }
+
+    function loadConfig() {
+      if (window.AndroidBridge && typeof window.AndroidBridge.getAgentConfig === 'function') {
+        try {
+          const cfg = JSON.parse(window.AndroidBridge.getAgentConfig());
+          cachedConfig = cfg;
+
+          // Header
+          if (cfg.model) {
+            document.getElementById('header-device-info').textContent = cfg.model + " - v" + (cfg.version || "2.3.1");
+            document.getElementById('display-device-model').textContent = cfg.model;
+          }
+          if (cfg.androidVersion) {
+            document.getElementById('display-os-version').textContent = cfg.androidVersion;
+          }
+          if (cfg.deviceId) {
+            document.getElementById('display-device-id').textContent = cfg.deviceId;
+            document.getElementById('lock-device-id').textContent = cfg.deviceId;
+          }
+          if (cfg.assetTag) {
+            document.getElementById('display-asset-tag').textContent = cfg.assetTag;
+            document.getElementById('settings-tag').value = cfg.assetTag;
+            document.getElementById('lock-tag').textContent = cfg.assetTag;
+          } else {
+            document.getElementById('display-asset-tag').textContent = '-';
+            document.getElementById('settings-tag').value = '';
+            document.getElementById('lock-tag').textContent = '-';
+          }
+          document.getElementById('settings-server-url').value = cfg.serverUrl || '';
+          const tokenEl = document.getElementById('settings-token');
+          if (tokenEl) tokenEl.value = cfg.token || '';
+
+          // Admin / Owner Status
+          updateAdminBadge(cfg.isAdminActive, cfg.isOwnerActive);
+
+          // Lock screen status
+          if (cfg.isLocked) {
+            setLockdownMode(true);
+          }
+
+          // Dynamic Badge & Status
+          const badgeEnrolled = document.getElementById('badge-enrolled');
+          const heroTitle = document.getElementById('hero-title');
+          const heroDesc = document.getElementById('hero-desc');
+          const heroHeartbeat = document.getElementById('hero-heartbeat-text');
+
+          if (cfg.isEnrolled && cfg.assetTag) {
+            if (badgeEnrolled) {
+              badgeEnrolled.textContent = "REGISTERED";
+              badgeEnrolled.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800";
+            }
+            if (heroTitle) heroTitle.textContent = "PERANGKAT TERLINDUNGI";
+            if (heroDesc) heroDesc.textContent = "Detak jantung aktif terhubung ke server endpoint SecOps.";
+            if (heroHeartbeat) heroHeartbeat.textContent = "Heartbeat 60 detik (Online)";
+            closeSettings();
+          } else {
+            if (badgeEnrolled) {
+              badgeEnrolled.textContent = "BELUM TERDAFTAR";
+              badgeEnrolled.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800";
+            }
+            if (heroTitle) heroTitle.textContent = "BELUM TERHUBUNG";
+            if (heroDesc) heroDesc.textContent = "Perangkat belum terdaftar. Masukkan URL dan Nomor Asset di Pengaturan.";
+            if (heroHeartbeat) heroHeartbeat.textContent = "Offline (Menunggu Pendaftaran)";
+            openSettings();
+          }
+        } catch (e) {}
+      }
+    }
+
+    function updateAdminBadge(isAdmin, isOwner) {
+      const pill = document.getElementById('admin-status-pill');
+      const btn = document.getElementById('btn-admin-activate');
+      if (!pill || !btn) return;
+      if (isOwner) {
+        pill.textContent = "DEVICE OWNER (KEBAL HAPUS)";
+        pill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-700";
+        btn.innerHTML = "<span class='material-symbols-outlined text-[16px]'>verified</span><span>Proteksi Tertinggi (Device Owner) Aktif</span>";
+        btn.disabled = true;
+        btn.className = "w-full py-2.5 bg-purple-950/50 text-purple-300 border border-purple-800/60 font-semibold text-xs rounded-xl flex items-center justify-center space-x-2 opacity-80 cursor-default";
+      } else if (isAdmin) {
+        pill.textContent = "DEVICE ADMIN (AKTIF)";
+        pill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700";
+        btn.innerHTML = "<span class='material-symbols-outlined text-[16px]'>check_circle</span><span>Proteksi Device Admin Aktif</span>";
+        btn.disabled = true;
+        btn.className = "w-full py-2.5 bg-emerald-950/50 text-emerald-300 border border-emerald-800/60 font-semibold text-xs rounded-xl flex items-center justify-center space-x-2 opacity-80 cursor-default";
+      } else {
+        pill.textContent = "BELUM AKTIF";
+        pill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-800";
+        btn.innerHTML = "<span class='material-symbols-outlined text-[16px]'>security</span><span>Aktifkan Proteksi Device Admin</span>";
+        btn.disabled = false;
+        btn.className = "w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-800/60 font-semibold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer";
+      }
+    }
+
+    function saveSettings() {
+      const serverUrl = document.getElementById('settings-server-url').value.trim();
+      const token = (document.getElementById('settings-token')?.value || '').trim();
+      const tag = document.getElementById('settings-tag').value.trim();
+
+      if (!serverUrl) {
+        showToast('URL Endpoint Server wajib diisi!', false);
+        return;
+      }
+      if (!token) {
+        showToast('Deployment Token wajib diisi!', false);
+        return;
+      }
+      if (!tag) {
+        showToast('Nomor Asset TAG wajib diisi!', false);
+        return;
+      }
+
+      const btn = document.getElementById('btn-save-settings');
+      btn.disabled = true;
+      btn.innerHTML = "<span class='material-symbols-outlined text-[19px] animate-spin'>sync</span><span>Menghubungkan ke Server...</span>";
+
+      if (window.AndroidBridge && typeof window.AndroidBridge.enroll === 'function') {
+        window.AndroidBridge.enroll(serverUrl, token, tag);
+      }
+    }
+
+    // Java Callback: onEnrollComplete
+    window.onEnrollComplete = function(success, message) {
+      const btn = document.getElementById('btn-save-settings');
+      btn.disabled = false;
+      btn.innerHTML = "<span class='material-symbols-outlined text-[19px]'>cloud_upload</span><span>Hubungkan & Daftarkan Perangkat</span>";
+
+      showToast(message, success);
+      if (success) {
+        closeSettings();
+        loadConfig();
+      }
+    };
+
+    // Sync Now
+    function syncNow() {
+      const btn = document.getElementById('sync-btn');
+      const icon = document.getElementById('sync-icon');
+      const text = document.getElementById('sync-text');
+
+      btn.disabled = true;
+      icon.classList.add('animate-spin');
+      text.textContent = "Menghubungkan ke Server...";
+
+      if (window.AndroidBridge && typeof window.AndroidBridge.syncNow === 'function') {
+        window.AndroidBridge.syncNow();
+      }
+    }
+
+    // Java Callback: onSyncComplete
+    window.onSyncComplete = function(success, message) {
+      const btn = document.getElementById('sync-btn');
+      const icon = document.getElementById('sync-icon');
+      const text = document.getElementById('sync-text');
+
+      btn.disabled = false;
+      icon.classList.remove('animate-spin');
+      text.textContent = "Sinkronkan Sekarang";
+
+      showToast(message, success);
+    };
+
+    // Java Callback: onSaveTagComplete
+    window.onSaveTagComplete = function(success, message) {
+      showToast(message, success);
+      loadConfig();
+    };
+
+    // Request Admin
+    function requestAdmin() {
+      if (window.AndroidBridge && typeof window.AndroidBridge.requestDeviceAdmin === 'function') {
+        window.AndroidBridge.requestDeviceAdmin();
+      }
+    }
+
+    // Unenroll MDM & Restore Settings
+    function requestUnenroll() {
+      const tokenInput = document.getElementById('settings-uninstall-token');
+      const token = tokenInput ? tokenInput.value.trim() : '';
+
+      if (!token) {
+        showToast('Token Uninstalasi IT wajib diisi!', false);
+        return;
+      }
+
+      if (!confirm('Peringatan: Seluruh pembatasan keamanan MDM (blokir APK, kamera, USB) akan dikembalikan ke kondisi normal dan aplikasi akan di-uninstall. Lanjutkan?')) {
+        return;
+      }
+
+      const btn = document.getElementById('btn-unenroll');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = "<span class='material-symbols-outlined text-[17px] animate-spin'>sync</span><span>Memverifikasi Otorisasi ke Server...</span>";
+      }
+
+      if (window.AndroidBridge && typeof window.AndroidBridge.unenrollDevice === 'function') {
+        window.AndroidBridge.unenrollDevice(token);
+      } else {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = "<span class='material-symbols-outlined text-[17px]'>lock_open</span><span>Verifikasi Otorisasi & Lepas MDM</span>";
+        }
+        showToast('Fitur unenroll tidak didukung pada versi ini.', false);
+      }
+    }
+
+    // Java Callback: onUnenrollComplete
+    window.onUnenrollComplete = function(success, message) {
+      const btn = document.getElementById('btn-unenroll');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = "<span class='material-symbols-outlined text-[17px]'>lock_open</span><span>Verifikasi Otorisasi & Lepas MDM</span>";
+      }
+      showToast(message, success);
+    };
+
+    // Lockdown Mode (Remote IT Command only)
+    window.setLockdownMode = function(isLocked) {
+      const lockView = document.getElementById('view-lockdown');
+      if (!lockView) return;
+      if (isLocked) {
+        lockView.classList.remove('hidden');
+        const input = document.getElementById('input-unlock-pin');
+        if (input) {
+          input.value = '';
+          setTimeout(() => input.focus(), 300);
+        }
+        const err = document.getElementById('unlock-error-msg');
+        if (err) err.classList.add('hidden');
+      } else {
+        lockView.classList.add('hidden');
+      }
+    };
+
+    function togglePinVisibility() {
+      const input = document.getElementById('input-unlock-pin');
+      const icon = document.getElementById('pin-eye-icon');
+      if (!input || !icon) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.innerText = 'visibility_off';
+      } else {
+        input.type = 'password';
+        icon.innerText = 'visibility';
+      }
+    }
+
+    function submitUnlockPin() {
+      const input = document.getElementById('input-unlock-pin');
+      const errorMsg = document.getElementById('unlock-error-msg');
+      const btn = document.getElementById('btn-submit-unlock');
+      const btnText = document.getElementById('btn-submit-unlock-text');
+      if (!input) return;
+
+      const pin = input.value.trim();
+      if (!pin) {
+        if (errorMsg) {
+          errorMsg.innerText = 'Silakan masukkan PIN unlock otorisasi IT.';
+          errorMsg.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (errorMsg) errorMsg.classList.add('hidden');
+      if (btn) btn.disabled = true;
+      if (btnText) btnText.innerText = 'Memverifikasi...';
+
+      if (window.AndroidBridge && typeof window.AndroidBridge.unlockWithPin === 'function') {
+        window.AndroidBridge.unlockWithPin(pin);
+      } else {
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.innerText = 'Buka Kunci Layar';
+        if (errorMsg) {
+          errorMsg.innerText = 'Fitur unlock lokal belum tersedia di browser.';
+          errorMsg.classList.remove('hidden');
+        }
+      }
+    }
+
+    // Java Callback: onUnlockAttemptResult
+    window.onUnlockAttemptResult = function(success, message) {
+      const btn = document.getElementById('btn-submit-unlock');
+      const btnText = document.getElementById('btn-submit-unlock-text');
+      const errorMsg = document.getElementById('unlock-error-msg');
+      const input = document.getElementById('input-unlock-pin');
+
+      if (btn) btn.disabled = false;
+      if (btnText) btnText.innerText = 'Buka Kunci Layar';
+
+      if (success) {
+        if (input) input.value = '';
+        if (errorMsg) errorMsg.classList.add('hidden');
+        window.setLockdownMode(false);
+        showToast(message || 'Layar berhasil dibuka!', true);
+      } else {
+        if (errorMsg) {
+          errorMsg.innerText = message || 'PIN unlock tidak valid.';
+          errorMsg.classList.remove('hidden');
+        }
+        showToast(message || 'PIN unlock tidak valid', false);
+      }
+    };
+
+    function callHelpdesk() {
+      if (window.AndroidBridge && typeof window.AndroidBridge.callHelpdesk === 'function') {
+        window.AndroidBridge.callHelpdesk('+622150881234');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const pinInput = document.getElementById('input-unlock-pin');
+      if (pinInput) {
+        pinInput.addEventListener('keyup', (e) => {
+          if (e.key === 'Enter') {
+            submitUnlockPin();
+          }
+        });
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', loadConfig);
+    window.addEventListener('load', loadConfig);
+    setTimeout(loadConfig, 300);
+    setTimeout(loadConfig, 1000);
+  </script>
+</body>
+</html>
