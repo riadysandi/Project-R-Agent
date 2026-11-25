@@ -298,6 +298,23 @@ func (a *Agent) handleCommand(data []byte) {
 		}
 
 		if a.requireConsent() {
+			if a.consentApproved.Load() {
+				log.Println("[Agent] Consent already approved for active session. Resuming stream...")
+				a.sendJSON(map[string]interface{}{
+					"type":     "consent_response",
+					"approved": true,
+				})
+				a.streaming.Store(true)
+				screen.PreventDisplaySleep(true)
+				return
+			}
+			a.sessionMu.Lock()
+			promptActive := a.sessionCmd != nil && a.sessionCmd.Process != nil
+			a.sessionMu.Unlock()
+			if promptActive {
+				log.Println("[Agent] Consent prompt already active. Ignoring duplicate request.")
+				return
+			}
 			log.Printf("[Agent] Consent request from [%s] (%s). Spawning prompt...", p.AdminName, p.AdminRole)
 			a.consentApproved.Store(false)
 			a.streaming.Store(false)
@@ -519,9 +536,14 @@ func (a *Agent) handleCommand(data []byte) {
 						a.connMu.Unlock()
 					}
 				} else {
-					log.Println("[Agent] Viewer connected and consent required. Prompting client user for approval...")
-					a.streaming.Store(false)
-					_ = a.startRemoteSessionUI("Admin IT", "Administrator")
+					a.sessionMu.Lock()
+					promptActive := a.sessionCmd != nil && a.sessionCmd.Process != nil
+					a.sessionMu.Unlock()
+					if !promptActive {
+						log.Println("[Agent] Viewer connected and consent required. Prompting client user for approval...")
+						a.streaming.Store(false)
+						_ = a.startRemoteSessionUI("Admin IT", "Administrator")
+					}
 				}
 			}
 		}

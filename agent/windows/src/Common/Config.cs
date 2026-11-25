@@ -43,12 +43,13 @@ namespace ProjectR.Agent.Common
 
     public class AgentConfig
     {
-        public const string CurrentVersion = "2.4.7";
+        public const string CurrentVersion = "2.4.8";
 
         public string ServerUrl { get; set; }
         public string Token { get; set; }
         public string Tag { get; set; }
         public string Version { get; set; }
+        public string DeviceId { get; set; }
         public int HeartbeatIntervalSeconds { get; set; }
         public string InstalledAt { get; set; }
 
@@ -58,6 +59,7 @@ namespace ProjectR.Agent.Common
             Token = "";
             Tag = "";
             Version = CurrentVersion;
+            DeviceId = "";
             HeartbeatIntervalSeconds = 60;
             InstalledAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         }
@@ -318,7 +320,7 @@ namespace ProjectR.Agent.Common
 
             JavaScriptSerializer serializer = new JavaScriptSerializer();
             string json = serializer.Serialize(this);
-            File.WriteAllText(path, json, Encoding.UTF8);
+            File.WriteAllText(path, json, new UTF8Encoding(false));
 
             string tagPath = GetTagFilePath();
             if (!string.IsNullOrEmpty(Tag))
@@ -327,7 +329,7 @@ namespace ProjectR.Agent.Common
                 {
                     try { File.SetAttributes(tagPath, FileAttributes.Normal); } catch { }
                 }
-                File.WriteAllText(tagPath, Tag.Trim(), Encoding.UTF8);
+                File.WriteAllText(tagPath, Tag.Trim(), new UTF8Encoding(false));
             }
         }
 

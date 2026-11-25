@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"log"
@@ -24,7 +25,7 @@ var (
 )
 
 var (
-	version = "2.4.7"
+	version = "2.4.8"
 
 	serverFlag   = flag.String("server", "", "Project R Relay / Server URL")
 	deviceIDFlag = flag.String("device-id", "", "Device ID (defaults to hardware UUID or registry)")
@@ -54,8 +55,12 @@ func loadExistingAgentConfig() *AgentConfigFile {
 		return nil
 	}
 
+	// Strip UTF-8 BOM if written by PowerShell Set-Content / .NET Encoding.UTF8
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
+
 	var cfg AgentConfigFile
 	if err := json.Unmarshal(data, &cfg); err != nil {
+		log.Printf("[Main] Failed to parse agent.json: %v", err)
 		return nil
 	}
 	return &cfg

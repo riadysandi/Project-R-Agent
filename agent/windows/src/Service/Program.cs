@@ -124,7 +124,7 @@ namespace ProjectR.Agent.Service
             _protectionThread = new Thread(() =>
             {
                 int browserScanTick = 0;
-                int daemonCheckTick = 0;
+                int daemonCheckTick = 116; // Run first session daemon check ~2s after service start
                 while (_protectionRunning)
                 {
                     try
@@ -225,6 +225,11 @@ namespace ProjectR.Agent.Service
                         if (string.IsNullOrEmpty(devId))
                         {
                             try { devId = SystemInfo.Collect(cfg.Token, cfg.Tag, cfg.Version).device_id; _cachedDeviceId = devId; } catch { }
+                        }
+                        if (!string.IsNullOrEmpty(devId) && string.IsNullOrEmpty(cfg.DeviceId))
+                        {
+                            cfg.DeviceId = devId;
+                            try { cfg.Save(); } catch { }
                         }
                         SessionLauncher.EnsureRemoteAgentRunning(remoteAgentExe, cfg.ServerUrl, devId, cfg.Token, Log);
                     }
