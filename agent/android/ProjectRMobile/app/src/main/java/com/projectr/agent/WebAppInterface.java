@@ -42,6 +42,7 @@ public class WebAppInterface {
             obj.put("isAdminActive", isDeviceAdminActive());
             obj.put("isOwnerActive", isDeviceOwnerActive());
             obj.put("isLocked", prefs.getBoolean("is_locked", false));
+            obj.put("policyStatus", MdmPolicyManager.getPolicyStatusJson(activity));
 
             return obj.toString();
         } catch (Exception e) {
@@ -92,6 +93,7 @@ public class WebAppInterface {
                             .putString("asset_tag", cleanTag)
                             .apply();
 
+                    HeartbeatService.triggerImmediateSync(activity);
                     callback("onEnrollComplete", true, "Perangkat berhasil didaftarkan ke server Project R!");
                 } else {
                     String msg = resp.optString("message", resp.optString("response", "Gagal mendaftarkan perangkat. Periksa token dan URL server."));
@@ -135,7 +137,12 @@ public class WebAppInterface {
 
                 if ("ok".equalsIgnoreCase(status) || "success".equalsIgnoreCase(status)) {
                     if (resp.has("policies")) {
-                        HeartbeatService.applyPolicies(activity, resp.getJSONObject("policies"));
+                        org.json.JSONArray evals = MdmPolicyManager.applyAndEvaluatePolicies(activity, resp.getJSONObject("policies"));
+                        if (evals.length() > 0) {
+                            try {
+                                NetworkHelper.sendHeartbeat(activity, serverUrl, token, tag, evals);
+                            } catch (Exception ignored) {}
+                        }
                     }
                     callback("onSyncComplete", true, "Sinkronisasi berhasil! Status perangkat ONLINE di Web Portal.");
                 } else {
@@ -356,8 +363,11 @@ public class WebAppInterface {
     @JavascriptInterface
     public void callHelpdesk(String phoneNumber) {
         try {
+            if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
+                return;
+            }
             Intent intent = new Intent(Intent.ACTION_DIAL);
-            intent.setData(Uri.parse("tel:" + (phoneNumber != null ? phoneNumber : "+622150881234")));
+            intent.setData(Uri.parse("tel:" + phoneNumber.trim()));
             activity.startActivity(intent);
         } catch (Exception ignored) {}
     }

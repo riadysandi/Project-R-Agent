@@ -13,8 +13,9 @@ Unlike regular Android apps that have restricted permissions, the Project R MDM 
 2. **QR Code Provisioning**: Tap the setup wizard screen 6 times on a factory-reset device $\rightarrow$ scan the Project R enrollment QR code containing the server URL and enrollment token.
 3. **ADB Command (Developer / Staging Lab)**:
    ```bash
-   adb shell dpm set-device-owner com.projectr.agent/.receiver.ProjectRDeviceAdminReceiver
+   adb shell dpm set-device-owner com.projectr.agent/.ProjectRDeviceAdminReceiver
    ```
+   > **Note (Android 10+ / targetSdk 29+)**: Plain **Device Admin** cannot enforce `setCameraDisabled` (`SecurityException`) or `UserManager` restrictions. The agent must be provisioned as **Device Owner** (`isDeviceOwnerApp == true`).
 4. **Zero-Touch Enrollment (ZTE) / Knox Mobile Enrollment (KME)**: Automated enrollment as soon as the device connects to Wi-Fi out of the box.
 
 ---
@@ -71,6 +72,6 @@ Unlike regular Android apps that have restricted permissions, the Project R MDM 
 ---
 
 ## 4. Background Engine & Heartbeat
-- **Persistent Service**: `ProjectRHeartbeatService` running as an Android Foreground Service with a persistent, non-dismissible notification (`START_STICKY`).
+- **Persistent Service**: `HeartbeatService` (`com.projectr.agent.HeartbeatService`) running as an Android Foreground Service with a persistent, non-dismissible notification (`START_STICKY`), enforcing policies via `MdmPolicyManager` and reporting Observed State `evaluations` back on `/api/agent/heartbeat`.
 - **Power Optimization**: Uses `WorkManager` with `PeriodicWorkRequestBuilder` (15-min background sync) + WebSocket / Firebase Cloud Messaging (FCM) high-priority push for instant 60s heartbeats and real-time remote commands.
 - **Fail-Safe Offline Queue**: SQLite / Room database stores offline logs and telemetry until network connectivity is re-established.

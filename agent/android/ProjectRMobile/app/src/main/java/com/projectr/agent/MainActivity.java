@@ -23,6 +23,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
     private WebView webView;
+    private long lastResumeSyncMs = 0L;
     private final BroadcastReceiver lockReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -31,6 +32,8 @@ public class MainActivity extends AppCompatActivity {
                 setLockState(true);
             } else if ("com.projectr.agent.UNLOCK".equals(action)) {
                 setLockState(false);
+            } else if (MdmPolicyManager.ACTION_POLICY_UPDATED.equals(action)) {
+                runJs("if (typeof loadConfig === 'function') { loadConfig(); }");
             }
         }
     };
@@ -87,10 +90,11 @@ public class MainActivity extends AppCompatActivity {
         webView.addJavascriptInterface(new WebAppInterface(this), "AndroidBridge");
         webView.loadUrl("file:///android_asset/www/index.html");
 
-        // Register Lock/Unlock Broadcast
+        // Register Lock/Unlock & Policy Broadcasts
         IntentFilter filter = new IntentFilter();
         filter.addAction("com.projectr.agent.LOCK");
         filter.addAction("com.projectr.agent.UNLOCK");
+        filter.addAction(MdmPolicyManager.ACTION_POLICY_UPDATED);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(lockReceiver, filter, Context.RECEIVER_EXPORTED);
         } else {
@@ -155,10 +159,17 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        SharedPreferences prefs = getSharedPreferences("project_r_prefs", Context.MODE_PRIVATE);
+        SharedPreferences prefs = getSharedPreferences(MdmPolicyManager.PREFS_NAME, Context.MODE_PRIVATE);
         boolean isLocked = prefs.getBoolean("is_locked", false);
         if (isLocked) {
             setLockState(true);
+        }
+        if (prefs.getBoolean("is_enrolled", false)) {
+            long now = System.currentTimeMillis();
+            if (now - lastResumeSyncMs > 15000L) {
+                lastResumeSyncMs = now;
+                HeartbeatService.triggerImmediateSync(this);
+            }
         }
         runJs("if (typeof loadConfig === 'function') { loadConfig(); }");
     }

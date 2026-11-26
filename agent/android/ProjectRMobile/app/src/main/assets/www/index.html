@@ -182,7 +182,37 @@
       </div>
     </section>
 
-    <!-- 4. LIVE HEALTH GAUGES -->
+    <!-- 4. STATUS PROTEKSI MDM & KEBIJAKAN KAMERA -->
+    <section class="w-full rounded-2xl bg-slate-900/70 border border-slate-800 p-4 space-y-2.5 shadow-md">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <span class="material-symbols-outlined text-purple-400 text-[18px]">admin_panel_settings</span>
+          <span class="font-semibold text-sm text-white">Proteksi MDM &amp; Kebijakan</span>
+        </div>
+        <span id="admin-status-pill" class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+          MEMERIKSA...
+        </span>
+      </div>
+
+      <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/60">
+        <div class="flex items-center space-x-2 text-slate-400">
+          <span class="material-symbols-outlined text-[16px]">no_photography</span>
+          <span class="text-xs">Kebijakan Kamera</span>
+        </div>
+        <span id="policy-camera-pill" class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+          NORMAL
+        </span>
+      </div>
+
+      <p id="policy-camera-reason" class="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-700/50 rounded-xl px-3 py-2 hidden leading-relaxed"></p>
+
+      <button id="btn-admin-activate" onclick="requestAdmin()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-800/60 font-semibold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer">
+        <span class="material-symbols-outlined text-[16px]">security</span>
+        <span>Aktifkan Proteksi Device Admin</span>
+      </button>
+    </section>
+
+    <!-- 5. LIVE HEALTH GAUGES -->
     <section class="grid grid-cols-2 gap-2.5 w-full">
       <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-3 flex flex-col space-y-0.5">
         <div class="flex items-center justify-between">
@@ -202,14 +232,14 @@
       </div>
     </section>
 
-    <!-- 5. TOMBOL UTAMA & FOOTNOTE -->
+    <!-- 6. TOMBOL UTAMA & FOOTNOTE -->
     <footer class="flex flex-col items-center w-full pt-1 space-y-2">
       <button id="sync-btn" onclick="syncNow()" class="w-full h-12 bg-sky-500 hover:bg-sky-400 active:scale-[0.98] text-slate-950 font-bold text-sm rounded-xl flex items-center justify-center space-x-2 shadow-lg shadow-sky-500/20 transition-all duration-150">
         <span class="material-symbols-outlined text-[20px]" id="sync-icon">sync</span>
         <span id="sync-text">Sinkronkan Sekarang</span>
       </button>
       <p class="text-[10px] text-slate-500 text-center font-medium">
-        Dikelola secara terpusat oleh IT Infrastructure PMA.
+        Dikelola secara terpusat oleh IT Infrastructure.
       </p>
     </footer>
 
@@ -333,7 +363,7 @@
       </div>
       <h1 class="font-display text-xl font-bold tracking-tight text-white">AKSES LAYAR DIKUNCI</h1>
       <p class="text-xs text-red-200 max-w-xs mx-auto leading-relaxed">
-        Perangkat ini adalah aset sah milik <b>PT Pinus Merah Abadi</b>. Hak akses dinonaktifkan sementara secara terpusat oleh Administrator IT.
+        Perangkat ini dikelola oleh organisasi Anda. Hak akses dinonaktifkan sementara secara terpusat oleh Administrator IT.
       </p>
     </div>
 
@@ -376,10 +406,9 @@
     </div>
 
     <div class="w-full max-w-sm space-y-2 pb-4">
-      <button onclick="callHelpdesk()" class="w-full py-2.5 bg-red-900/60 hover:bg-red-800/80 border border-red-700/80 text-red-100 font-medium text-xs rounded-xl shadow flex items-center justify-center space-x-2">
-        <span class="material-symbols-outlined text-[16px]">call</span>
-        <span>Hubungi IT Support (+62 21 5088 1234)</span>
-      </button>
+      <p class="text-[11px] text-red-200/80 text-center">
+        Hubungi Administrator IT atau Helpdesk organisasi Anda untuk mendapatkan PIN pembuka kunci.
+      </p>
     </div>
   </div>
 
@@ -470,8 +499,9 @@
           const tokenEl = document.getElementById('settings-token');
           if (tokenEl) tokenEl.value = cfg.token || '';
 
-          // Admin / Owner Status
+          // Admin / Owner Status & Camera Policy Observed State
           updateAdminBadge(cfg.isAdminActive, cfg.isOwnerActive);
+          updatePolicyStatus(cfg.policyStatus, cfg.isAdminActive, cfg.isOwnerActive);
 
           // Lock screen status
           if (cfg.isLocked) {
@@ -518,17 +548,53 @@
         btn.disabled = true;
         btn.className = "w-full py-2.5 bg-purple-950/50 text-purple-300 border border-purple-800/60 font-semibold text-xs rounded-xl flex items-center justify-center space-x-2 opacity-80 cursor-default";
       } else if (isAdmin) {
-        pill.textContent = "DEVICE ADMIN (AKTIF)";
-        pill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700";
-        btn.innerHTML = "<span class='material-symbols-outlined text-[16px]'>check_circle</span><span>Proteksi Device Admin Aktif</span>";
+        pill.textContent = "DEVICE ADMIN (TERBATAS)";
+        pill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700";
+        btn.innerHTML = "<span class='material-symbols-outlined text-[16px]'>warning</span><span>Device Admin Aktif (Butuh Device Owner)</span>";
         btn.disabled = true;
-        btn.className = "w-full py-2.5 bg-emerald-950/50 text-emerald-300 border border-emerald-800/60 font-semibold text-xs rounded-xl flex items-center justify-center space-x-2 opacity-80 cursor-default";
+        btn.className = "w-full py-2.5 bg-amber-950/40 text-amber-300 border border-amber-800/60 font-semibold text-xs rounded-xl flex items-center justify-center space-x-2 opacity-90 cursor-default";
       } else {
         pill.textContent = "BELUM AKTIF";
         pill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-800";
         btn.innerHTML = "<span class='material-symbols-outlined text-[16px]'>security</span><span>Aktifkan Proteksi Device Admin</span>";
         btn.disabled = false;
         btn.className = "w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-800/60 font-semibold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer";
+      }
+    }
+
+    function updatePolicyStatus(policyStatus, isAdmin, isOwner) {
+      const camPill = document.getElementById('policy-camera-pill');
+      const camReason = document.getElementById('policy-camera-reason');
+      if (!camPill || !camReason) return;
+
+      const ps = policyStatus || {};
+      const desired = ps.cameraDesired || 'unknown';
+      const observed = ps.cameraObserved || 'allowed';
+      const compliant = (ps.cameraCompliant !== false);
+      const evidence = ps.cameraEvidence || '';
+
+      if (desired === 'blocked' && observed === 'blocked' && compliant) {
+        camPill.textContent = "KAMERA DIBLOKIR";
+        camPill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-700";
+        camReason.classList.add('hidden');
+      } else if (!compliant || (desired === 'blocked' && observed !== 'blocked')) {
+        camPill.textContent = "DRIFTED (KAMERA AKTIF)";
+        camPill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700";
+        camReason.textContent = evidence || "Kebijakan blokir kamera belum dapat ditegakkan karena perangkat belum berstatus Device Owner.";
+        camReason.classList.remove('hidden');
+      } else if (observed === 'blocked') {
+        camPill.textContent = "KAMERA DIBLOKIR";
+        camPill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-700";
+        camReason.classList.add('hidden');
+      } else {
+        camPill.textContent = "KAMERA AKTIF";
+        camPill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700";
+        if (!isOwner && isAdmin) {
+          camReason.textContent = "Mode Device Admin terbatas: kebijakan blokir kamera pada Android 10+ membutuhkan provisioning Device Owner.";
+          camReason.classList.remove('hidden');
+        } else {
+          camReason.classList.add('hidden');
+        }
       }
     }
 
@@ -598,6 +664,7 @@
       text.textContent = "Sinkronkan Sekarang";
 
       showToast(message, success);
+      loadConfig();
     };
 
     // Java Callback: onSaveTagComplete
@@ -652,6 +719,7 @@
         btn.innerHTML = "<span class='material-symbols-outlined text-[17px]'>lock_open</span><span>Verifikasi Otorisasi & Lepas MDM</span>";
       }
       showToast(message, success);
+      loadConfig();
     };
 
     // Lockdown Mode (Remote IT Command only)
@@ -741,9 +809,9 @@
       }
     };
 
-    function callHelpdesk() {
-      if (window.AndroidBridge && typeof window.AndroidBridge.callHelpdesk === 'function') {
-        window.AndroidBridge.callHelpdesk('+622150881234');
+    function callHelpdesk(phoneNumber) {
+      if (phoneNumber && window.AndroidBridge && typeof window.AndroidBridge.callHelpdesk === 'function') {
+        window.AndroidBridge.callHelpdesk(phoneNumber);
       }
     }
 

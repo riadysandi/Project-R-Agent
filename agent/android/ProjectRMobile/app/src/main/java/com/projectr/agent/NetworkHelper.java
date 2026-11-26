@@ -1,9 +1,9 @@
 package com.projectr.agent;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Build;
 import android.provider.Settings;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -23,7 +23,10 @@ public class NetworkHelper {
                 return "AND-" + id.toUpperCase();
             }
         } catch (Exception ignored) {}
-        return "AND-" + Build.SERIAL != null ? Build.SERIAL : "DEV-" + Build.MODEL.hashCode();
+        String fallbackSerial = (Build.SERIAL != null && !Build.SERIAL.trim().isEmpty() && !Build.UNKNOWN.equalsIgnoreCase(Build.SERIAL))
+                ? Build.SERIAL.trim()
+                : "DEV-" + Build.MODEL.hashCode();
+        return "AND-" + fallbackSerial;
     }
 
     public static String getHostname() {
@@ -97,6 +100,10 @@ public class NetworkHelper {
     }
 
     public static JSONObject sendHeartbeat(Context context, String serverUrl, String token, String tag) throws Exception {
+        return sendHeartbeat(context, serverUrl, token, tag, MdmPolicyManager.buildEvaluations(context));
+    }
+
+    public static JSONObject sendHeartbeat(Context context, String serverUrl, String token, String tag, JSONArray evaluations) throws Exception {
         String cleanUrl = serverUrl.replaceAll("/+$", "") + "/api/agent/heartbeat";
         String cleanToken = (token != null && !token.trim().isEmpty()) ? token.trim() : DEFAULT_TOKEN;
 
@@ -112,6 +119,9 @@ public class NetworkHelper {
         payload.put("chassis_type", "Smartphone");
         payload.put("version", getAppVersion(context));
         payload.put("status", "online");
+        if (evaluations != null && evaluations.length() > 0) {
+            payload.put("evaluations", evaluations);
+        }
         LocationHelper.attachLocationData(context, payload);
 
         String resp = postJson(cleanUrl, payload.toString(), cleanToken);

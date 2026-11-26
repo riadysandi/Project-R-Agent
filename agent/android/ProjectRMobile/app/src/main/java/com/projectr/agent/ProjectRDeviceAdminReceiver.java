@@ -16,16 +16,31 @@ public class ProjectRDeviceAdminReceiver extends DeviceAdminReceiver {
     @Override
     public void onEnabled(Context context, Intent intent) {
         super.onEnabled(context, intent);
+        boolean isDeviceOwner = false;
         try {
             DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
             ComponentName adminComponent = new ComponentName(context, ProjectRDeviceAdminReceiver.class);
-            if (dpm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && dpm.isDeviceOwnerApp(context.getPackageName())) {
+            isDeviceOwner = dpm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2
+                    && dpm.isDeviceOwnerApp(context.getPackageName());
+            if (isDeviceOwner && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 dpm.setUninstallBlocked(adminComponent, context.getPackageName(), true);
                 dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_UNINSTALL_APPS);
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                Log.w(TAG, "Device Admin diaktifkan tanpa status Device Owner. Kebijakan Android 10+ (seperti block_camera) memerlukan Device Owner.");
             }
-        } catch (Exception ignored) {}
-        Toast.makeText(context, "Project R: Device Owner aktif & Anti-Uninstall terkunci", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Log.e(TAG, "Error pada onEnabled: " + e.getMessage(), e);
+        }
+
+        if (isDeviceOwner) {
+            Toast.makeText(context, "Project R: Device Owner aktif & Anti-Uninstall terkunci", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(context, "Project R: Device Admin aktif (Mode Terbatas — butuh Device Owner untuk blokir kamera)", Toast.LENGTH_LONG).show();
+        }
+
+        MdmPolicyManager.applyCachedPolicies(context);
         startGuardian(context);
+        HeartbeatService.triggerImmediateSync(context);
     }
 
     @Override
@@ -74,6 +89,9 @@ public class ProjectRDeviceAdminReceiver extends DeviceAdminReceiver {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     try { dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES_GLOBALLY); } catch (Exception ignored) {}
                 }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    try { dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_CAMERA_TOGGLE); } catch (Exception ignored) {}
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     try {
                         String[] fileManagers = new String[] {
@@ -90,7 +108,9 @@ public class ProjectRDeviceAdminReceiver extends DeviceAdminReceiver {
             // 2. Kembalikan Sensor Kamera ke AKTIF
             try {
                 dpm.setCameraDisabled(adminComponent, false);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                Log.w(TAG, "Gagal mengembalikan setCameraDisabled(false): " + e.getMessage());
+            }
 
             Log.i(TAG, "Seluruh pembatasan MDM Android (APK, Kamera, USB) berhasil dinetralkan ke normal!");
         } catch (Exception e) {
