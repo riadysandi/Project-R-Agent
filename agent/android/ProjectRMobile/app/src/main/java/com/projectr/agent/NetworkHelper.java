@@ -39,7 +39,7 @@ public class NetworkHelper {
         try {
             return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
         } catch (Exception ignored) {
-            return "2.3.5";
+            return "2.4.2";
         }
     }
 
@@ -100,10 +100,14 @@ public class NetworkHelper {
     }
 
     public static JSONObject sendHeartbeat(Context context, String serverUrl, String token, String tag) throws Exception {
-        return sendHeartbeat(context, serverUrl, token, tag, MdmPolicyManager.buildEvaluations(context));
+        return sendHeartbeat(context, serverUrl, token, tag, MdmPolicyManager.buildEvaluations(context), false);
     }
 
     public static JSONObject sendHeartbeat(Context context, String serverUrl, String token, String tag, JSONArray evaluations) throws Exception {
+        return sendHeartbeat(context, serverUrl, token, tag, evaluations, false);
+    }
+
+    public static JSONObject sendHeartbeat(Context context, String serverUrl, String token, String tag, JSONArray evaluations, boolean remoteUnenrollAck) throws Exception {
         String cleanUrl = serverUrl.replaceAll("/+$", "") + "/api/agent/heartbeat";
         String cleanToken = (token != null && !token.trim().isEmpty()) ? token.trim() : DEFAULT_TOKEN;
 
@@ -121,6 +125,9 @@ public class NetworkHelper {
         payload.put("status", "online");
         if (evaluations != null && evaluations.length() > 0) {
             payload.put("evaluations", evaluations);
+        }
+        if (remoteUnenrollAck) {
+            payload.put("remote_unenroll_ack", true);
         }
         LocationHelper.attachLocationData(context, payload);
 

@@ -26,6 +26,7 @@ public class MdmPolicyManager {
     public static final String PREF_LAST_POLICIES = "last_policies_json";
     public static final String PREF_LAST_EVALUATIONS = "last_policy_evaluations";
     public static final String PREF_LAST_POLICY_STATUS = "last_policy_status";
+    public static final String PREF_MDM_UNENROLLED = "mdm_unenrolled";
     public static final String ACTION_POLICY_UPDATED = "com.projectr.agent.POLICY_UPDATED";
 
     private static final String[] FILE_MANAGER_PACKAGES = new String[] {
@@ -72,6 +73,13 @@ public class MdmPolicyManager {
     public static void applyCachedPolicies(Context context) {
         try {
             SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            if (prefs.getBoolean(PREF_MDM_UNENROLLED, false)) {
+                DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+                ComponentName admin = new ComponentName(context, ProjectRDeviceAdminReceiver.class);
+                if (!isAdminActive(dpm, admin) && !isDeviceOwner(dpm, context.getPackageName())) {
+                    return;
+                }
+            }
             String raw = prefs.getString(PREF_LAST_POLICIES, "");
             if (raw != null && !raw.trim().isEmpty()) {
                 applyAndEvaluatePolicies(context, new JSONObject(raw));
@@ -79,6 +87,122 @@ public class MdmPolicyManager {
         } catch (Exception e) {
             Log.e(TAG, "Failed to apply cached policies: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Executes remote unenroll requested by the web portal:
+     * restores all restrictions, clears Device Owner and Device Admin privileges,
+     * clears cached MDM policies, unlocks any warning screen, and notifies the UI.
+     */
+    public static boolean performRemoteUnenroll(Context context) {
+        if (context == null) return false;
+        Log.i(TAG, "Memproses remote_unenroll: memulihkan pembatasan dan melepas hak MDM...");
+
+        DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        ComponentName adminComponent = new ComponentName(context, ProjectRDeviceAdminReceiver.class);
+        String pkg = context.getPackageName();
+
+        // 1. Kembalikan seluruh pembatasan sistem dan buka blokir uninstall
+        ProjectRDeviceAdminReceiver.restoreAllRestrictions(context);
+
+        // 2. Lepas status Device Owner jika aktif
+        if (dpm != null && isDeviceOwner(dpm, pkg) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                dpm.clearDeviceOwnerApp(pkg);
+                Log.i(TAG, "clearDeviceOwnerApp(" + pkg + ") berhasil dipanggil.");
+            } catch (Exception e) {
+                Log.e(TAG, "Gagal clearDeviceOwnerApp: " + e.getMessage(), e);
+            }
+        }
+
+        // 3. Lepas status Device Admin jika masih aktif
+        if (dpm != null && isAdminActive(dpm, adminComponent)) {
+            try {
+                dpm.removeActiveAdmin(adminComponent);
+                Log.i(TAG, "removeActiveAdmin berhasil dipanggil.");
+            } catch (Exception e) {
+                Log.e(TAG, "Gagal removeActiveAdmin: " + e.getMessage(), e);
+            }
+        }
+
+        // 4. Verifikasi status terbaru setelah pelepasan
+        boolean stillOwner = isDeviceOwner(dpm, pkg);
+        boolean stillAdmin = isAdminActive(dpm, adminComponent);
+        boolean success = !stillOwner && !stillAdmin;
+
+        if (!success) {
+            Log.w(TAG, "Verifikasi remote_unenroll belum sepenuhnya bersih: isOwner=" + stillOwner + ", isAdmin=" + stillAdmin);
+        } else {
+            Log.i(TAG, "Verifikasi remote_unenroll sukses: Device Owner=false, Device Admin=false.");
+        }
+
+        // 5. Bersihkan cache kebijakan & kunci layar agar tidak diterapkan ulang
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        boolean wasLocked = prefs.getBoolean("is_locked", false);
+        prefs.edit()
+                .remove(PREF_LAST_POLICIES)
+                .remove(PREF_LAST_EVALUATIONS)
+                .remove(PREF_LAST_POLICY_STATUS)
+                .remove("app_whitelist")
+                .remove("warning_unlock_password")
+                .putBoolean("is_locked", false)
+                .putBoolean(PREF_MDM_UNENROLLED, success)
+                .apply();
+
+        // 6. Beritahu MainActivity / WebView untuk melepas layar kunci dan memperbarui status UI
+        try {
+            if (wasLocked) {
+                Intent unlockIntent = new Intent("com.projectr.agent.UNLOCK");
+                unlockIntent.setPackage(pkg);
+                context.sendBroadcast(unlockIntent);
+            }
+            Intent policyUpdatedIntent = new Intent(ACTION_POLICY_UPDATED);
+            policyUpdatedIntent.setPackage(pkg);
+            context.sendBroadcast(policyUpdatedIntent);
+        } catch (Exception e) {
+            Log.w(TAG, "Broadcast setelah remote_unenroll gagal: " + e.getMessage());
+        }
+
+        return success;
+    }
+
+    /**
+     * Inspects server pending_actions array and executes supported remote actions (e.g., remote_unenroll).
+     * Returns true if remote_unenroll completed so caller can send remote_unenroll_ack immediately.
+     */
+    public static boolean handlePendingActions(Context context, JSONArray pendingActions) {
+        if (context == null || pendingActions == null || pendingActions.length() == 0) {
+            return false;
+        }
+        boolean unenrolled = false;
+        for (int i = 0; i < pendingActions.length(); i++) {
+            JSONObject action = pendingActions.optJSONObject(i);
+            if (action == null) continue;
+            String type = action.optString("type", "").trim();
+            if ("remote_unenroll".equalsIgnoreCase(type)) {
+                Log.i(TAG, "Menerima pending action remote_unenroll (id=" + action.optString("id", "-") + ")");
+                if (performRemoteUnenroll(context)) {
+                    unenrolled = true;
+                }
+            }
+        }
+        return unenrolled;
+    }
+
+    public static boolean isMdmUnenrolledAndUnprivileged(Context context) {
+        if (context == null) return false;
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        if (!prefs.getBoolean(PREF_MDM_UNENROLLED, false)) {
+            return false;
+        }
+        DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        ComponentName admin = new ComponentName(context, ProjectRDeviceAdminReceiver.class);
+        boolean stillPrivileged = isAdminActive(dpm, admin) || isDeviceOwner(dpm, context.getPackageName());
+        if (stillPrivileged) {
+            prefs.edit().putBoolean(PREF_MDM_UNENROLLED, false).apply();
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -645,7 +769,7 @@ public class MdmPolicyManager {
             ComponentName admin = new ComponentName(context, ProjectRDeviceAdminReceiver.class);
             boolean isAdmin = isAdminActive(dpm, admin);
             boolean isOwner = isDeviceOwner(dpm, context.getPackageName());
-            fallback.put("privilegeMode", isOwner ? "Device Owner" : (isAdmin ? "Device Admin only" : "Unprivileged (Admin inactive)"));
+            fallback.put("privilegeMode", isOwner ? "Device Owner" : (isAdmin ? "Device Admin only" : "Aplikasi Biasa (MDM Tidak Aktif)"));
             fallback.put("isAdminActive", isAdmin);
             fallback.put("isOwnerActive", isOwner);
             fallback.put("cameraDesired", "unknown");
@@ -655,7 +779,9 @@ public class MdmPolicyManager {
             } catch (Exception ignored) {}
             fallback.put("cameraObserved", disabled ? "blocked" : "allowed");
             fallback.put("cameraCompliant", true);
-            fallback.put("cameraEvidence", "Menunggu sinkronisasi kebijakan pertama dari server.");
+            fallback.put("cameraEvidence", (!isAdmin && !isOwner)
+                    ? "Mode aplikasi biasa (non-MDM). Perangkat bebas dari pembatasan dan siap di-uninstall."
+                    : "Menunggu sinkronisasi kebijakan pertama dari server.");
         } catch (Exception ignored) {}
         return fallback;
     }

@@ -476,7 +476,7 @@
 
           // Header
           if (cfg.model) {
-            document.getElementById('header-device-info').textContent = cfg.model + " - v" + (cfg.version || "2.3.1");
+            document.getElementById('header-device-info').textContent = cfg.model + " - v" + (cfg.version || "2.4.2");
             document.getElementById('display-device-model').textContent = cfg.model;
           }
           if (cfg.androidVersion) {
@@ -554,8 +554,8 @@
         btn.disabled = true;
         btn.className = "w-full py-2.5 bg-amber-950/40 text-amber-300 border border-amber-800/60 font-semibold text-xs rounded-xl flex items-center justify-center space-x-2 opacity-90 cursor-default";
       } else {
-        pill.textContent = "BELUM AKTIF";
-        pill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-800";
+        pill.textContent = "BELUM AKTIF / APLIKASI BIASA";
+        pill.className = "font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-emerald-300 border border-emerald-700/60";
         btn.innerHTML = "<span class='material-symbols-outlined text-[16px]'>security</span><span>Aktifkan Proteksi Device Admin</span>";
         btn.disabled = false;
         btn.className = "w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-800/60 font-semibold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer";
@@ -572,6 +572,8 @@
       const observed = ps.cameraObserved || 'allowed';
       const compliant = (ps.cameraCompliant !== false);
       const evidence = ps.cameraEvidence || '';
+
+      camReason.className = "text-[11px] text-amber-300 bg-amber-950/40 border border-amber-700/50 rounded-xl px-3 py-2 hidden leading-relaxed";
 
       if (desired === 'blocked' && observed === 'blocked' && compliant) {
         camPill.textContent = "KAMERA DIBLOKIR";
@@ -592,6 +594,9 @@
         if (!isOwner && isAdmin) {
           camReason.textContent = "Mode Device Admin terbatas: kebijakan blokir kamera pada Android 10+ membutuhkan provisioning Device Owner.";
           camReason.classList.remove('hidden');
+        } else if (!isOwner && !isAdmin) {
+          camReason.className = "text-[11px] text-emerald-300 bg-emerald-950/30 border border-emerald-700/50 rounded-xl px-3 py-2 leading-relaxed";
+          camReason.textContent = "Aplikasi berjalan sebagai aplikasi biasa (non-MDM) dan siap di-uninstall langsung melalui Pengaturan HP atau ADB.";
         } else {
           camReason.classList.add('hidden');
         }
@@ -679,48 +684,6 @@
         window.AndroidBridge.requestDeviceAdmin();
       }
     }
-
-    // Unenroll MDM & Restore Settings
-    function requestUnenroll() {
-      const tokenInput = document.getElementById('settings-uninstall-token');
-      const token = tokenInput ? tokenInput.value.trim() : '';
-
-      if (!token) {
-        showToast('Token Uninstalasi IT wajib diisi!', false);
-        return;
-      }
-
-      if (!confirm('Peringatan: Seluruh pembatasan keamanan MDM (blokir APK, kamera, USB) akan dikembalikan ke kondisi normal dan aplikasi akan di-uninstall. Lanjutkan?')) {
-        return;
-      }
-
-      const btn = document.getElementById('btn-unenroll');
-      if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = "<span class='material-symbols-outlined text-[17px] animate-spin'>sync</span><span>Memverifikasi Otorisasi ke Server...</span>";
-      }
-
-      if (window.AndroidBridge && typeof window.AndroidBridge.unenrollDevice === 'function') {
-        window.AndroidBridge.unenrollDevice(token);
-      } else {
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = "<span class='material-symbols-outlined text-[17px]'>lock_open</span><span>Verifikasi Otorisasi & Lepas MDM</span>";
-        }
-        showToast('Fitur unenroll tidak didukung pada versi ini.', false);
-      }
-    }
-
-    // Java Callback: onUnenrollComplete
-    window.onUnenrollComplete = function(success, message) {
-      const btn = document.getElementById('btn-unenroll');
-      if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = "<span class='material-symbols-outlined text-[17px]'>lock_open</span><span>Verifikasi Otorisasi & Lepas MDM</span>";
-      }
-      showToast(message, success);
-      loadConfig();
-    };
 
     // Lockdown Mode (Remote IT Command only)
     window.setLockdownMode = function(isLocked) {

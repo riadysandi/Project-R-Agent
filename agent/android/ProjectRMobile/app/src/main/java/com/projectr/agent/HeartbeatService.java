@@ -118,6 +118,23 @@ public class HeartbeatService extends Service {
                     if (srvInvInterval > 0) {
                         inventoryIntervalSec = srvInvInterval;
                     }
+
+                    // 1. Handle pending remote actions (e.g. remote_unenroll from web portal)
+                    if (MdmPolicyManager.handlePendingActions(this, resp.optJSONArray("pending_actions"))) {
+                        try {
+                            NetworkHelper.sendHeartbeat(this, baseUrl, token, tag, null, true);
+                        } catch (Exception ackEx) {
+                            Log.w(TAG, "Failed sending remote_unenroll_ack heartbeat: " + ackEx.getMessage());
+                        }
+                        return;
+                    }
+
+                    // 2. Skip re-enforcing MDM policies if device was remotely unenrolled and has no active admin/owner
+                    if (MdmPolicyManager.isMdmUnenrolledAndUnprivileged(this)) {
+                        Log.d(TAG, "Perangkat dalam status remote_unenroll (aplikasi biasa); melewati penerapan kebijakan MDM.");
+                        return;
+                    }
+
                     if (resp.has("policies")) {
                         JSONObject newPolicies = resp.getJSONObject("policies");
                         String newPoliciesRaw = newPolicies.toString();

@@ -88,6 +88,7 @@ public class WebAppInterface {
                     SharedPreferences prefs = activity.getSharedPreferences("project_r_prefs", Context.MODE_PRIVATE);
                     prefs.edit()
                             .putBoolean("is_enrolled", true)
+                            .putBoolean(MdmPolicyManager.PREF_MDM_UNENROLLED, false)
                             .putString("server_url", cleanUrl)
                             .putString("token", cleanToken)
                             .putString("asset_tag", cleanTag)
@@ -136,7 +137,14 @@ public class WebAppInterface {
                 }
 
                 if ("ok".equalsIgnoreCase(status) || "success".equalsIgnoreCase(status)) {
-                    if (resp.has("policies")) {
+                    if (MdmPolicyManager.handlePendingActions(activity, resp.optJSONArray("pending_actions"))) {
+                        try {
+                            NetworkHelper.sendHeartbeat(activity, serverUrl, token, tag, null, true);
+                        } catch (Exception ignored) {}
+                        callback("onSyncComplete", true, "Perangkat dilepas dari manajemen MDM (Aplikasi Biasa).");
+                        return;
+                    }
+                    if (!MdmPolicyManager.isMdmUnenrolledAndUnprivileged(activity) && resp.has("policies")) {
                         org.json.JSONArray evals = MdmPolicyManager.applyAndEvaluatePolicies(activity, resp.getJSONObject("policies"));
                         if (evals.length() > 0) {
                             try {
@@ -228,71 +236,6 @@ public class WebAppInterface {
         } catch (Exception e) {
             return false;
         }
-    }
-
-    @JavascriptInterface
-    public void unenrollDevice(String token) {
-        new Thread(() -> {
-            try {
-                if (token == null || token.trim().isEmpty()) {
-                    callback("onUnenrollComplete", false, "Token uninstalasi wajib diisi.");
-                    return;
-                }
-
-                SharedPreferences prefs = activity.getSharedPreferences("project_r_prefs", Context.MODE_PRIVATE);
-                String serverUrl = prefs.getString("server_url", "").trim();
-                if (serverUrl.isEmpty()) {
-                    callback("onUnenrollComplete", false, "URL Endpoint Server belum dikonfigurasi.");
-                    return;
-                }
-                String cleanToken = token.trim();
-
-                JSONObject resp = NetworkHelper.verifyUninstall(activity, serverUrl, cleanToken);
-                boolean authorized = resp.optBoolean("authorized", false);
-
-                if (authorized) {
-                    // 1. Kembalikan seluruh settingan pembatasan (Restore Policy Settings ke normal)
-                    ProjectRDeviceAdminReceiver.restoreAllRestrictions(activity);
-
-                    // 2. Lepas hak Device Owner & Device Admin
-                    DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
-                    ComponentName adminComponent = new ComponentName(activity, ProjectRDeviceAdminReceiver.class);
-                    if (dpm != null) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && dpm.isDeviceOwnerApp(activity.getPackageName())) {
-                            dpm.clearDeviceOwnerApp(activity.getPackageName());
-                        }
-                        if (dpm.isAdminActive(adminComponent)) {
-                            dpm.removeActiveAdmin(adminComponent);
-                        }
-                    }
-
-                    // 3. Matikan Background Heartbeat & Remote Relay Service
-                    RemoteRelayClient.getInstance(activity).disconnect();
-                    activity.stopService(new Intent(activity, HeartbeatService.class));
-
-                    // 4. Bersihkan data preferensi lokal
-                    prefs.edit().clear().apply();
-
-                    callback("onUnenrollComplete", true, "Otorisasi berhasil. Seluruh kebijakan blokir telah dinetralkan. Membuka dialog uninstal...");
-
-                    // 5. Buka dialog uninstal bawaan Android
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                        try {
-                            Intent intent = new Intent(Intent.ACTION_DELETE);
-                            intent.setData(Uri.parse("package:" + activity.getPackageName()));
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            activity.startActivity(intent);
-                        } catch (Exception ignored) {}
-                    }, 1200);
-
-                } else {
-                    String msg = resp.optString("message", "Token uninstalasi ditolak oleh server.");
-                    callback("onUnenrollComplete", false, msg);
-                }
-            } catch (Exception e) {
-                callback("onUnenrollComplete", false, "Gagal memverifikasi token uninstalasi: " + e.getMessage());
-            }
-        }).start();
     }
 
     @JavascriptInterface

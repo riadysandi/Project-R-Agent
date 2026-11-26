@@ -38,6 +38,11 @@ public class ProjectRDeviceAdminReceiver extends DeviceAdminReceiver {
             Toast.makeText(context, "Project R: Device Admin aktif (Mode Terbatas — butuh Device Owner untuk blokir kamera)", Toast.LENGTH_LONG).show();
         }
 
+        context.getSharedPreferences(MdmPolicyManager.PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(MdmPolicyManager.PREF_MDM_UNENROLLED, false)
+                .apply();
+
         MdmPolicyManager.applyCachedPolicies(context);
         startGuardian(context);
         HeartbeatService.triggerImmediateSync(context);
@@ -77,9 +82,10 @@ public class ProjectRDeviceAdminReceiver extends DeviceAdminReceiver {
 
             ComponentName adminComponent = new ComponentName(context, ProjectRDeviceAdminReceiver.class);
 
-            // 1. Kembalikan User Restrictions & Buka blokir uninstall
+            // 1. Kembalikan User Restrictions, LockTask & Buka blokir uninstall
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 try { dpm.setUninstallBlocked(adminComponent, context.getPackageName(), false); } catch (Exception ignored) {}
+                try { dpm.setLockTaskPackages(adminComponent, new String[0]); } catch (Exception ignored) {}
                 try { dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES); } catch (Exception ignored) {}
                 try { dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_INSTALL_APPS); } catch (Exception ignored) {}
                 try { dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_UNINSTALL_APPS); } catch (Exception ignored) {}
