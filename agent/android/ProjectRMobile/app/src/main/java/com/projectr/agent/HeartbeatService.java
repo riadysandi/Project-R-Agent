@@ -50,7 +50,9 @@ public class HeartbeatService extends Service {
                 .setContentText("Detak jantung aktif terhubung ke SecOps")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setOngoing(true)
+                .setOngoing(false)
+                .setOnlyAlertOnce(true)
+                .setAutoCancel(false)
                 .build();
         startForeground(1337, notification);
         LocationHelper.ensureLocationUpdates(this);

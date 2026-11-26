@@ -39,7 +39,7 @@ public class NetworkHelper {
         try {
             return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
         } catch (Exception ignored) {
-            return "2.4.3";
+            return "2.4.4";
         }
     }
 
