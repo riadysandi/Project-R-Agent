@@ -94,6 +94,7 @@ public class WebAppInterface {
                             .putString("asset_tag", cleanTag)
                             .apply();
 
+                    WatchdogJobService.schedulePeriodic(activity);
                     HeartbeatService.triggerImmediateSync(activity);
                     callback("onEnrollComplete", true, "Perangkat berhasil didaftarkan ke server Project R!");
                 } else {

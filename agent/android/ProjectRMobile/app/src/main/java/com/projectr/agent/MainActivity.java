@@ -9,10 +9,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.WindowManager;
@@ -116,13 +119,12 @@ public class MainActivity extends AppCompatActivity {
 
         LocationHelper.ensureLocationUpdates(this);
 
-        // Start Background Heartbeat Service
-        Intent serviceIntent = new Intent(this, HeartbeatService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent);
-        } else {
-            startService(serviceIntent);
+        // Schedule persistent JobScheduler watchdog & start Background Heartbeat Service
+        if (prefs.getBoolean("is_enrolled", false)) {
+            WatchdogJobService.schedulePeriodic(this);
+            maybeRequestBatteryOptimizationExemption(prefs);
         }
+        WatchdogJobService.tryStartHeartbeatService(this);
     }
 
     @Override
@@ -151,6 +153,10 @@ public class MainActivity extends AppCompatActivity {
             }
             if (changed) {
                 editor.apply();
+                if (prefs.getBoolean("is_enrolled", false)) {
+                    WatchdogJobService.schedulePeriodic(this);
+                    HeartbeatService.triggerImmediateSync(this);
+                }
                 runJs("if (typeof loadConfig === 'function') { loadConfig(); }");
             }
         }
@@ -165,6 +171,8 @@ public class MainActivity extends AppCompatActivity {
             setLockState(true);
         }
         if (prefs.getBoolean("is_enrolled", false)) {
+            WatchdogJobService.schedulePeriodic(this);
+            maybeRequestBatteryOptimizationExemption(prefs);
             long now = System.currentTimeMillis();
             if (now - lastResumeSyncMs > 15000L) {
                 lastResumeSyncMs = now;
@@ -172,6 +180,27 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         runJs("if (typeof loadConfig === 'function') { loadConfig(); }");
+    }
+
+    private void maybeRequestBatteryOptimizationExemption(SharedPreferences prefs) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+        if (prefs.getBoolean("battery_opt_prompted", false)) return;
+
+        try {
+            DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+            if (MdmPolicyManager.isDeviceOwner(dpm, getPackageName())) {
+                return;
+            }
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                prefs.edit().putBoolean("battery_opt_prompted", true).apply();
+                Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            }
+        } catch (Exception e) {
+            Log.w("MainActivity", "Failed requesting battery optimization exemption: " + e.getMessage());
+        }
     }
 
     @Override

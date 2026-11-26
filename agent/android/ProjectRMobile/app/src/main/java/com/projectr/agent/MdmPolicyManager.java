@@ -27,6 +27,7 @@ public class MdmPolicyManager {
     public static final String PREF_LAST_EVALUATIONS = "last_policy_evaluations";
     public static final String PREF_LAST_POLICY_STATUS = "last_policy_status";
     public static final String PREF_MDM_UNENROLLED = "mdm_unenrolled";
+    public static final String PREF_MDM_UNENROLL_IN_PROGRESS = "mdm_unenroll_in_progress";
     public static final String ACTION_POLICY_UPDATED = "com.projectr.agent.POLICY_UPDATED";
 
     private static final String[] FILE_MANAGER_PACKAGES = new String[] {
@@ -102,6 +103,9 @@ public class MdmPolicyManager {
         ComponentName adminComponent = new ComponentName(context, ProjectRDeviceAdminReceiver.class);
         String pkg = context.getPackageName();
 
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putBoolean(PREF_MDM_UNENROLL_IN_PROGRESS, true).apply();
+
         // 1. Kembalikan seluruh pembatasan sistem dan buka blokir uninstall
         ProjectRDeviceAdminReceiver.restoreAllRestrictions(context);
 
@@ -115,7 +119,7 @@ public class MdmPolicyManager {
             }
         }
 
-        // 3. Lepas status Device Admin jika masih aktif
+        // 3. Lepas status Device Admin jika masih aktif (removeActiveAdmin bersifat asinkron)
         if (dpm != null && isAdminActive(dpm, adminComponent)) {
             try {
                 dpm.removeActiveAdmin(adminComponent);
@@ -125,19 +129,28 @@ public class MdmPolicyManager {
             }
         }
 
-        // 4. Verifikasi status terbaru setelah pelepasan
+        // 4. Verifikasi status terbaru dengan retry polling hingga 500ms karena removeActiveAdmin asinkron
         boolean stillOwner = isDeviceOwner(dpm, pkg);
         boolean stillAdmin = isAdminActive(dpm, adminComponent);
+        for (int attempt = 0; attempt < 10 && (stillOwner || stillAdmin); attempt++) {
+            try {
+                Thread.sleep(50L);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            stillOwner = isDeviceOwner(dpm, pkg);
+            stillAdmin = isAdminActive(dpm, adminComponent);
+        }
         boolean success = !stillOwner && !stillAdmin;
 
         if (!success) {
-            Log.w(TAG, "Verifikasi remote_unenroll belum sepenuhnya bersih: isOwner=" + stillOwner + ", isAdmin=" + stillAdmin);
+            Log.w(TAG, "Verifikasi remote_unenroll belum sepenuhnya bersih setelah 500ms: isOwner=" + stillOwner + ", isAdmin=" + stillAdmin);
         } else {
             Log.i(TAG, "Verifikasi remote_unenroll sukses: Device Owner=false, Device Admin=false.");
         }
 
         // 5. Bersihkan cache kebijakan & kunci layar agar tidak diterapkan ulang
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         boolean wasLocked = prefs.getBoolean("is_locked", false);
         prefs.edit()
                 .remove(PREF_LAST_POLICIES)
@@ -147,6 +160,7 @@ public class MdmPolicyManager {
                 .remove("warning_unlock_password")
                 .putBoolean("is_locked", false)
                 .putBoolean(PREF_MDM_UNENROLLED, success)
+                .putBoolean(PREF_MDM_UNENROLL_IN_PROGRESS, !success)
                 .apply();
 
         // 6. Beritahu MainActivity / WebView untuk melepas layar kunci dan memperbarui status UI

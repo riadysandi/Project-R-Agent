@@ -22,21 +22,20 @@ public class BootReceiver extends BroadcastReceiver {
                 || "com.htc.intent.action.QUICKBOOT_POWERON".equals(action)
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
 
-            SharedPreferences prefs = context.getSharedPreferences("project_r_prefs", Context.MODE_PRIVATE);
+            SharedPreferences prefs = context.getSharedPreferences(MdmPolicyManager.PREFS_NAME, Context.MODE_PRIVATE);
             boolean isEnrolled = prefs.getBoolean("is_enrolled", false);
 
-            Log.i(TAG, "Perangkat booting selesai. Status terdaftar: " + isEnrolled + ". Menyalakan HeartbeatService...");
+            Log.i(TAG, "Perangkat booting/update selesai. Status terdaftar: " + isEnrolled);
 
-            Intent serviceIntent = new Intent(context, HeartbeatService.class);
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(serviceIntent);
+            if (isEnrolled) {
+                WatchdogJobService.schedulePeriodic(context);
+                boolean started = WatchdogJobService.tryStartHeartbeatService(context);
+                if (started) {
+                    Log.i(TAG, "HeartbeatService berhasil dinyalakan otomatis setelah boot/update.");
                 } else {
-                    context.startService(serviceIntent);
+                    Log.w(TAG, "Start foreground service ditolak OS; menjadwalkan WatchdogJobService restart fallback.");
+                    WatchdogJobService.scheduleRestart(context);
                 }
-                Log.i(TAG, "HeartbeatService berhasil dinyalakan otomatis setelah boot.");
-            } catch (Exception e) {
-                Log.e(TAG, "Gagal menyalakan HeartbeatService pada boot: " + e.getMessage(), e);
             }
 
             // Jika status sedang dikunci saat HP dihidupkan ulang, seketika buka layar kunci Kiosk

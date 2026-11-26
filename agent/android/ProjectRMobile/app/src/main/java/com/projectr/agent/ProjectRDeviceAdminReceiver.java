@@ -59,6 +59,20 @@ public class ProjectRDeviceAdminReceiver extends DeviceAdminReceiver {
         super.onDisabled(context, intent);
         Log.i(TAG, "Device Admin dinonaktifkan, mengembalikan seluruh pembatasan kebijakan ke normal...");
         restoreAllRestrictions(context);
+        try {
+            android.content.SharedPreferences prefs = context.getSharedPreferences(MdmPolicyManager.PREFS_NAME, Context.MODE_PRIVATE);
+            if (prefs.getBoolean(MdmPolicyManager.PREF_MDM_UNENROLL_IN_PROGRESS, false)) {
+                prefs.edit()
+                        .putBoolean(MdmPolicyManager.PREF_MDM_UNENROLLED, true)
+                        .putBoolean(MdmPolicyManager.PREF_MDM_UNENROLL_IN_PROGRESS, false)
+                        .apply();
+                Intent policyUpdatedIntent = new Intent(MdmPolicyManager.ACTION_POLICY_UPDATED);
+                policyUpdatedIntent.setPackage(context.getPackageName());
+                context.sendBroadcast(policyUpdatedIntent);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Gagal memfinalisasi status remote_unenroll di onDisabled: " + e.getMessage());
+        }
     }
 
     private void startGuardian(Context context) {
