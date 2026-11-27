@@ -300,7 +300,7 @@ public class MdmPolicyManager {
 
         // Enforce File Manager / Physical Media DLP
         boolean blockStorage = policies.optBoolean("block_file_manager", false);
-        applyUserRestriction(dpm, adminComponent, isDeviceOwner,
+        String fileManagerErr = applyUserRestriction(dpm, adminComponent, isDeviceOwner,
                 UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA,
                 blockStorage);
         if (isDeviceOwner && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -308,6 +308,7 @@ public class MdmPolicyManager {
                 dpm.setPackagesSuspended(adminComponent, FILE_MANAGER_PACKAGES, blockStorage);
             } catch (Exception e) {
                 Log.w(TAG, "setPackagesSuspended(" + blockStorage + ") failed: " + e.getMessage());
+                if (fileManagerErr == null) fileManagerErr = e.getMessage();
             }
         }
 
@@ -325,11 +326,11 @@ public class MdmPolicyManager {
         // Remote Lock / Warning Screen
         applyWarningScreenPolicy(context, dpm, adminComponent, isAdmin, isDeviceOwner, policies, prefs);
 
-        // Build & persist evaluations from real observed OS state
+        // Build & persist evaluations + local UI status from real observed OS state
         JSONArray evaluations = evaluateDeviceState(
                 context, dpm, adminComponent, isAdmin, isDeviceOwner, hasOwnerPrivilege,
                 policies, cameraApplyError, unknownSourcesErr, installAppsErr,
-                uninstallAppsErr, usbTransferErr, forceGpsErr
+                uninstallAppsErr, usbTransferErr, forceGpsErr, fileManagerErr
         );
 
         prefs.edit().putString(PREF_LAST_EVALUATIONS, evaluations.toString()).apply();
@@ -535,7 +536,7 @@ public class MdmPolicyManager {
 
             JSONArray evaluations = evaluateDeviceState(
                     context, dpm, adminComponent, isAdmin, isDeviceOwner, hasOwnerPrivilege,
-                    policies, null, null, null, null, null, null
+                    policies, null, null, null, null, null, null, null
             );
             prefs.edit().putString(PREF_LAST_EVALUATIONS, evaluations.toString()).apply();
             return evaluations;
@@ -558,9 +559,45 @@ public class MdmPolicyManager {
             String installAppsErr,
             String uninstallAppsErr,
             String usbTransferErr,
-            String forceGpsErr
+            String forceGpsErr,
+            String fileManagerErr
     ) {
-        JSONArray list = new JSONArray();
+        JSONObject snapshot = buildPolicySnapshot(
+                context, dpm, adminComponent, isAdmin, isDeviceOwner, hasOwnerPrivilege,
+                policies, true, cameraApplyError, unknownSourcesErr, installAppsErr,
+                uninstallAppsErr, usbTransferErr, forceGpsErr, fileManagerErr
+        );
+        JSONObject summary = snapshot.optJSONObject("summary");
+        if (summary != null) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(PREF_LAST_POLICY_STATUS, summary.toString())
+                    .apply();
+        }
+        JSONArray list = snapshot.optJSONArray("evaluations");
+        return list != null ? list : new JSONArray();
+    }
+
+    private static JSONObject buildPolicySnapshot(
+            Context context,
+            DevicePolicyManager dpm,
+            ComponentName adminComponent,
+            boolean isAdmin,
+            boolean isDeviceOwner,
+            boolean hasOwnerPrivilege,
+            JSONObject policies,
+            boolean hasSyncedPolicies,
+            String cameraApplyError,
+            String unknownSourcesErr,
+            String installAppsErr,
+            String uninstallAppsErr,
+            String usbTransferErr,
+            String forceGpsErr,
+            String fileManagerErr
+    ) {
+        JSONArray evalList = new JSONArray();
+        JSONArray localPolicies = new JSONArray();
+        JSONObject safePolicies = policies != null ? policies : new JSONObject();
 
         String privilegeLabel = isDeviceOwner
                 ? "Device Owner"
@@ -575,8 +612,34 @@ public class MdmPolicyManager {
             }
         }
 
-        // 1. block_camera
-        boolean blockCameraDesired = policies.optBoolean("block_camera", false);
+        // 1. block_unknown_sources
+        boolean blockUnknown = safePolicies.optBoolean("block_unknown_sources", false);
+        boolean unknownObserved = restrictions != null && (
+                restrictions.getBoolean(UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES, false)
+                        || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                        && restrictions.getBoolean(UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES_GLOBALLY, false)));
+        addRestrictionEvaluation(evalList, localPolicies, "block_unknown_sources", "Blokir APK Luar",
+                blockUnknown, unknownObserved, isDeviceOwner, privilegeLabel, unknownSourcesErr,
+                "DISALLOW_INSTALL_UNKNOWN_SOURCES=" + unknownObserved);
+
+        // 2. block_app_installs
+        boolean blockInstalls = safePolicies.optBoolean("block_app_installs", false);
+        boolean installsObserved = restrictions != null
+                && restrictions.getBoolean(UserManager.DISALLOW_INSTALL_APPS, false);
+        addRestrictionEvaluation(evalList, localPolicies, "block_app_installs", "Kunci Instalasi Aplikasi",
+                blockInstalls, installsObserved, isDeviceOwner, privilegeLabel, installAppsErr,
+                "DISALLOW_INSTALL_APPS=" + installsObserved);
+
+        // 3. block_app_uninstalls
+        boolean blockUninstalls = safePolicies.optBoolean("block_app_uninstalls", false);
+        boolean uninstallsObserved = restrictions != null
+                && restrictions.getBoolean(UserManager.DISALLOW_UNINSTALL_APPS, false);
+        addRestrictionEvaluation(evalList, localPolicies, "block_app_uninstalls", "Kunci Pencopotan Aplikasi (Anti-Uninstall)",
+                blockUninstalls, uninstallsObserved, isDeviceOwner, privilegeLabel, uninstallAppsErr,
+                "DISALLOW_UNINSTALL_APPS=" + uninstallsObserved);
+
+        // 4. block_camera
+        boolean blockCameraDesired = safePolicies.optBoolean("block_camera", false);
         boolean observedCameraDisabled = false;
         String cameraReadError = null;
         if (dpm != null) {
@@ -593,12 +656,18 @@ public class MdmPolicyManager {
             }
         }
 
-        String camDesiredStr = blockCameraDesired ? "blocked" : "allowed";
+        String camDesiredStr = hasSyncedPolicies ? (blockCameraDesired ? "blocked" : "allowed") : "unknown";
         String camObservedStr;
         boolean camCompliant;
         String camEvidence;
 
-        if (cameraApplyError != null && blockCameraDesired && !observedCameraDisabled) {
+        if (!hasSyncedPolicies) {
+            camObservedStr = observedCameraDisabled ? "blocked" : "allowed";
+            camCompliant = !observedCameraDisabled;
+            camEvidence = (!isAdmin && !isDeviceOwner)
+                    ? "Mode aplikasi biasa (non-MDM). Perangkat bebas dari pembatasan dan siap di-uninstall."
+                    : "Menunggu sinkronisasi kebijakan pertama dari server.";
+        } else if (cameraApplyError != null && blockCameraDesired && !observedCameraDisabled) {
             camObservedStr = "allowed";
             camCompliant = false;
             camEvidence = cameraApplyError + " (" + privilegeLabel + ")";
@@ -620,62 +689,75 @@ public class MdmPolicyManager {
             }
         }
 
-        addEvaluation(list, "block_camera", camDesiredStr, camObservedStr, camCompliant, camEvidence);
-
-        // Save detailed local policy status for WebView UI
-        saveLocalStatusSummary(context, privilegeLabel, isAdmin, isDeviceOwner,
-                camDesiredStr, camObservedStr, camCompliant, camEvidence);
-
-        // 2. block_unknown_sources
-        boolean blockUnknown = policies.optBoolean("block_unknown_sources", false);
-        boolean unknownObserved = restrictions != null && (
-                restrictions.getBoolean(UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES, false)
-                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-                    && restrictions.getBoolean(UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES_GLOBALLY, false)));
-        addRestrictionEvaluation(list, "block_unknown_sources", blockUnknown, unknownObserved,
-                isDeviceOwner, privilegeLabel, unknownSourcesErr,
-                "DISALLOW_INSTALL_UNKNOWN_SOURCES=" + unknownObserved);
-
-        // 3. block_app_installs
-        boolean blockInstalls = policies.optBoolean("block_app_installs", false);
-        boolean installsObserved = restrictions != null
-                && restrictions.getBoolean(UserManager.DISALLOW_INSTALL_APPS, false);
-        addRestrictionEvaluation(list, "block_app_installs", blockInstalls, installsObserved,
-                isDeviceOwner, privilegeLabel, installAppsErr,
-                "DISALLOW_INSTALL_APPS=" + installsObserved);
-
-        // 4. block_app_uninstalls
-        boolean blockUninstalls = policies.optBoolean("block_app_uninstalls", false);
-        boolean uninstallsObserved = restrictions != null
-                && restrictions.getBoolean(UserManager.DISALLOW_UNINSTALL_APPS, false);
-        addRestrictionEvaluation(list, "block_app_uninstalls", blockUninstalls, uninstallsObserved,
-                isDeviceOwner, privilegeLabel, uninstallAppsErr,
-                "DISALLOW_UNINSTALL_APPS=" + uninstallsObserved);
+        addEvaluation(evalList, "block_camera", camDesiredStr, camObservedStr, camCompliant, camEvidence);
+        addLocalPolicyItem(localPolicies, "block_camera", "Blokir Sensor Kamera",
+                blockCameraDesired, observedCameraDisabled, camCompliant, camEvidence);
 
         // 5. block_usb_transfer
-        boolean blockUsb = policies.optBoolean("block_usb_transfer", false);
+        boolean blockUsb = safePolicies.optBoolean("block_usb_transfer", false);
         boolean usbObserved = restrictions != null
                 && restrictions.getBoolean(UserManager.DISALLOW_USB_FILE_TRANSFER, false);
-        addRestrictionEvaluation(list, "block_usb_transfer", blockUsb, usbObserved,
-                isDeviceOwner, privilegeLabel, usbTransferErr,
+        addRestrictionEvaluation(evalList, localPolicies, "block_usb_transfer", "Blokir Transfer File USB (MTP)",
+                blockUsb, usbObserved, isDeviceOwner, privilegeLabel, usbTransferErr,
                 "DISALLOW_USB_FILE_TRANSFER=" + usbObserved);
 
         // 6. force_gps
-        boolean forceGps = policies.optBoolean("force_gps", false);
+        boolean forceGps = safePolicies.optBoolean("force_gps", false);
         boolean gpsConfigLocked = restrictions != null
                 && restrictions.getBoolean(UserManager.DISALLOW_CONFIG_LOCATION, false);
         boolean gpsEnabled = isLocationEnabled(context);
         boolean gpsObserved = forceGps ? (gpsConfigLocked && gpsEnabled) : gpsConfigLocked;
         String gpsEvidence = "DISALLOW_CONFIG_LOCATION=" + gpsConfigLocked + ", locationEnabled=" + gpsEnabled;
-        addRestrictionEvaluation(list, "force_gps", forceGps, gpsObserved,
-                isDeviceOwner, privilegeLabel, forceGpsErr, gpsEvidence);
+        addRestrictionEvaluation(evalList, localPolicies, "force_gps", "Kunci Lokasi / GPS Wajib ON",
+                forceGps, gpsObserved, isDeviceOwner, privilegeLabel, forceGpsErr, gpsEvidence);
 
-        return list;
+        // 7. block_file_manager
+        boolean blockFileManager = safePolicies.optBoolean("block_file_manager", false);
+        boolean physicalMediaBlocked = restrictions != null
+                && restrictions.getBoolean(UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA, false);
+        addRestrictionEvaluation(evalList, localPolicies, "block_file_manager", "Blokir File Explorer & Penyimpanan Fisik",
+                blockFileManager, physicalMediaBlocked, isDeviceOwner, privilegeLabel, fileManagerErr,
+                "DISALLOW_MOUNT_PHYSICAL_MEDIA=" + physicalMediaBlocked);
+
+        // 8. warning_screen
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        boolean warningDesired = safePolicies.optBoolean("warning_screen", false);
+        boolean warningObserved = prefs.getBoolean("is_locked", false);
+        boolean warningCompliant = (warningDesired == warningObserved);
+        String warningEvidence = warningCompliant
+                ? ("is_locked=" + warningObserved + " (" + privilegeLabel + ")")
+                : ("is_locked=" + warningObserved + " != target " + warningDesired + " (" + privilegeLabel + ")");
+        addEvaluation(evalList, "warning_screen", warningDesired ? "locked" : "normal",
+                warningObserved ? "locked" : "normal", warningCompliant, warningEvidence);
+        addLocalPolicyItem(localPolicies, "warning_screen", "Kunci Layar Darurat",
+                warningDesired, warningObserved, warningCompliant, warningEvidence);
+
+        JSONObject summary = new JSONObject();
+        try {
+            summary.put("privilegeMode", (!isAdmin && !isDeviceOwner) ? "Aplikasi Biasa (MDM Tidak Aktif)" : privilegeLabel);
+            summary.put("isAdminActive", isAdmin);
+            summary.put("isOwnerActive", isDeviceOwner);
+            summary.put("cameraDesired", camDesiredStr);
+            summary.put("cameraObserved", camObservedStr);
+            summary.put("cameraCompliant", camCompliant);
+            summary.put("cameraEvidence", camEvidence);
+            summary.put("policies", localPolicies);
+            summary.put("evaluatedAt", System.currentTimeMillis());
+        } catch (Exception ignored) {}
+
+        JSONObject result = new JSONObject();
+        try {
+            result.put("evaluations", evalList);
+            result.put("summary", summary);
+        } catch (Exception ignored) {}
+        return result;
     }
 
     private static void addRestrictionEvaluation(
             JSONArray list,
+            JSONArray localPolicies,
             String controlKey,
+            String label,
             boolean desired,
             boolean observed,
             boolean isDeviceOwner,
@@ -704,6 +786,29 @@ public class MdmPolicyManager {
             evidence = rawEvidence + " (" + privilegeLabel + ")";
         }
         addEvaluation(list, controlKey, desiredStr, observedStr, compliant, evidence);
+        addLocalPolicyItem(localPolicies, controlKey, label, desired, observed, compliant, evidence);
+    }
+
+    private static void addLocalPolicyItem(
+            JSONArray localPolicies,
+            String key,
+            String label,
+            boolean desiredActive,
+            boolean observedActive,
+            boolean compliant,
+            String evidence
+    ) {
+        try {
+            JSONObject item = new JSONObject();
+            item.put("key", key);
+            item.put("label", label);
+            item.put("desiredActive", desiredActive);
+            item.put("observedActive", observedActive);
+            item.put("compliant", compliant);
+            item.put("evidence", evidence != null ? evidence : "");
+            item.put("reason", compliant ? "" : (evidence != null ? evidence : ""));
+            localPolicies.put(item);
+        } catch (Exception ignored) {}
     }
 
     private static void addEvaluation(
@@ -739,35 +844,35 @@ public class MdmPolicyManager {
         }
     }
 
-    private static void saveLocalStatusSummary(
-            Context context,
-            String privilegeLabel,
-            boolean isAdmin,
-            boolean isDeviceOwner,
-            String camDesired,
-            String camObserved,
-            boolean camCompliant,
-            String camEvidence
-    ) {
-        try {
-            JSONObject summary = new JSONObject();
-            summary.put("privilegeMode", privilegeLabel);
-            summary.put("isAdminActive", isAdmin);
-            summary.put("isOwnerActive", isDeviceOwner);
-            summary.put("cameraDesired", camDesired);
-            summary.put("cameraObserved", camObserved);
-            summary.put("cameraCompliant", camCompliant);
-            summary.put("cameraEvidence", camEvidence);
-            summary.put("evaluatedAt", System.currentTimeMillis());
-
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .edit()
-                    .putString(PREF_LAST_POLICY_STATUS, summary.toString())
-                    .apply();
-        } catch (Exception ignored) {}
-    }
-
     public static JSONObject getPolicyStatusJson(Context context) {
+        try {
+            DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName admin = new ComponentName(context, ProjectRDeviceAdminReceiver.class);
+            String pkg = context.getPackageName();
+
+            boolean isAdmin = isAdminActive(dpm, admin);
+            boolean isDeviceOwner = isDeviceOwner(dpm, pkg);
+            boolean isProfileOwner = isProfileOwner(dpm, pkg);
+            boolean hasOwnerPrivilege = isDeviceOwner || isProfileOwner;
+
+            boolean unenrolled = isMdmUnenrolledAndUnprivileged(context);
+            SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            String rawPolicies = unenrolled ? "" : prefs.getString(PREF_LAST_POLICIES, "");
+            boolean hasSyncedPolicies = rawPolicies != null && !rawPolicies.trim().isEmpty();
+            JSONObject policies = hasSyncedPolicies ? new JSONObject(rawPolicies) : new JSONObject();
+
+            JSONObject snapshot = buildPolicySnapshot(
+                    context, dpm, admin, isAdmin, isDeviceOwner, hasOwnerPrivilege,
+                    policies, hasSyncedPolicies, null, null, null, null, null, null, null
+            );
+            JSONObject summary = snapshot.optJSONObject("summary");
+            if (summary != null) {
+                return summary;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "getPolicyStatusJson live evaluation fallback: " + e.getMessage());
+        }
+
         try {
             SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             String raw = prefs.getString(PREF_LAST_POLICY_STATUS, "");
@@ -776,27 +881,6 @@ public class MdmPolicyManager {
             }
         } catch (Exception ignored) {}
 
-        // Fallback live privilege check before first policy sync
-        JSONObject fallback = new JSONObject();
-        try {
-            DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
-            ComponentName admin = new ComponentName(context, ProjectRDeviceAdminReceiver.class);
-            boolean isAdmin = isAdminActive(dpm, admin);
-            boolean isOwner = isDeviceOwner(dpm, context.getPackageName());
-            fallback.put("privilegeMode", isOwner ? "Device Owner" : (isAdmin ? "Device Admin only" : "Aplikasi Biasa (MDM Tidak Aktif)"));
-            fallback.put("isAdminActive", isAdmin);
-            fallback.put("isOwnerActive", isOwner);
-            fallback.put("cameraDesired", "unknown");
-            boolean disabled = false;
-            try {
-                if (dpm != null) disabled = dpm.getCameraDisabled(null);
-            } catch (Exception ignored) {}
-            fallback.put("cameraObserved", disabled ? "blocked" : "allowed");
-            fallback.put("cameraCompliant", true);
-            fallback.put("cameraEvidence", (!isAdmin && !isOwner)
-                    ? "Mode aplikasi biasa (non-MDM). Perangkat bebas dari pembatasan dan siap di-uninstall."
-                    : "Menunggu sinkronisasi kebijakan pertama dari server.");
-        } catch (Exception ignored) {}
-        return fallback;
+        return new JSONObject();
     }
 }
