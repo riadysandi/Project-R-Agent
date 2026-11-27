@@ -9,6 +9,9 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Media.Effects;
+using System.Windows.Media.Animation;
+using Ellipse = System.Windows.Shapes.Ellipse;
 using Microsoft.VisualBasic;
 using System.Text;
 using System.Runtime.InteropServices;
@@ -1571,62 +1574,126 @@ namespace ProjectR.Agent.Manager
         private bool _isApproved = false;
         private bool _isClosing = false;
         private Thread _stdinThread;
+        private bool _isModernMode = false;
 
         // UI containers
         private Grid _rootGrid;
+
+        // Modern Dynamic Island UI elements
+        private Border _islandBorder;
+
+        // Legacy UI elements
         private Border _consentCard;
+        private Border _dockCard;
+        private Border _chatFlyout;
+
+        // Shared UI elements
         private TextBlock _lblCountdown;
         private ProgressBar _pbCountdown;
-
-        // Dock UI
-        private Border _dockCard;
         private TextBlock _lblTimer;
-        private Border _chatFlyout;
-        private StackPanel _chatMessagesPanel;
-        private ScrollViewer _chatScrollViewer;
-        private TextBox _txtChatInput;
         private Border _unreadBadge;
         private TextBlock _lblUnreadCount;
         private int _unreadCount = 0;
         private bool _isChatExpanded = false;
+        private StackPanel _chatMessagesPanel;
+        private ScrollViewer _chatScrollViewer;
+        private TextBox _txtChatInput;
 
         public RemoteSessionWindow(string adminName, string adminRole, int timeoutSec)
         {
             _adminName = string.IsNullOrEmpty(adminName) ? "Admin IT" : adminName;
             _adminRole = string.IsNullOrEmpty(adminRole) ? "IT Support" : adminRole;
             _timeoutRemaining = timeoutSec > 0 ? timeoutSec : 120;
+            _isModernMode = SessionLauncher.IsWindows10OrGreater();
 
             this.Title = "Project R - Remote Desktop Session";
-            this.WindowStyle = WindowStyle.None;
-            this.AllowsTransparency = false;
-            this.Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#18181b");
-            this.BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#10b981");
-            this.BorderThickness = new Thickness(2);
-            this.Topmost = true;
-            this.ShowInTaskbar = true;
             this.FontFamily = new FontFamily("Segoe UI, -apple-system, sans-serif");
-
-            Rect workArea = SystemParameters.WorkArea;
-            this.Width = 560;
-            this.MinHeight = 440;
-            this.SizeToContent = SizeToContent.Height;
-            this.Left = workArea.Left + (workArea.Width - 560) / 2;
-            this.Top = workArea.Top + (workArea.Height - 440) / 2;
+            this.WindowStyle = WindowStyle.None;
+            this.Topmost = true;
             this.WindowStartupLocation = WindowStartupLocation.Manual;
 
-            _rootGrid = new Grid();
-            this.Content = _rootGrid;
+            Rect workArea = SystemParameters.WorkArea;
 
-            BuildConsentUI();
-            StartCountdown();
+            if (_isModernMode)
+            {
+                this.AllowsTransparency = true;
+                this.Background = Brushes.Transparent;
+                this.ShowInTaskbar = false;
+                this.BorderThickness = new Thickness(0);
+
+                this.Width = 446;
+                this.Height = 356;
+                this.Left = workArea.Left + (workArea.Width - 446) / 2.0;
+                this.Top = workArea.Top + 10;
+
+                _rootGrid = new Grid();
+                _rootGrid.Background = null;
+                this.Content = _rootGrid;
+
+                _islandBorder = new Border
+                {
+                    Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#09090b"),
+                    BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#27272a"),
+                    BorderThickness = new Thickness(1.2),
+                    CornerRadius = new CornerRadius(22),
+                    Margin = new Thickness(8),
+                    Effect = new DropShadowEffect
+                    {
+                        Color = Colors.Black,
+                        BlurRadius = 16,
+                        ShadowDepth = 3,
+                        Direction = 270,
+                        Opacity = 0.55
+                    }
+                };
+                _islandBorder.MouseLeftButtonDown += delegate(object s, MouseButtonEventArgs e)
+                {
+                    if (e.ButtonState == MouseButtonState.Pressed)
+                    {
+                        try { this.DragMove(); } catch { }
+                    }
+                };
+                _rootGrid.Children.Add(_islandBorder);
+
+                BuildModernConsentUI();
+                StartCountdown();
+            }
+            else
+            {
+                this.AllowsTransparency = false;
+                this.Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#18181b");
+                this.BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#10b981");
+                this.BorderThickness = new Thickness(2);
+                this.ShowInTaskbar = true;
+
+                this.Width = 560;
+                this.MinHeight = 440;
+                this.SizeToContent = SizeToContent.Height;
+                this.Left = workArea.Left + (workArea.Width - 560) / 2;
+                this.Top = workArea.Top + (workArea.Height - 440) / 2;
+
+                _rootGrid = new Grid();
+                this.Content = _rootGrid;
+
+                BuildLegacyConsentUI();
+                StartCountdown();
+            }
 
             this.Loaded += delegate
             {
                 try
                 {
                     Rect wa = SystemParameters.WorkArea;
-                    this.Left = wa.Left + (wa.Width - this.ActualWidth) / 2;
-                    this.Top = wa.Top + (wa.Height - this.ActualHeight) / 2;
+                    if (_isModernMode)
+                    {
+                        this.Top = wa.Top + 10;
+                        this.Left = wa.Left + (wa.Width - this.ActualWidth) / 2.0;
+                    }
+                    else
+                    {
+                        this.Left = wa.Left + (wa.Width - this.ActualWidth) / 2;
+                        this.Top = wa.Top + (wa.Height - this.ActualHeight) / 2;
+                    }
 
                     this.Activate();
                     this.Topmost = true;
@@ -1651,9 +1718,121 @@ namespace ProjectR.Agent.Manager
             {
                 if (!_isApproved && !_isClosing)
                 {
-                    RejectConsent("Jendela ditutup pengguna");
+                    RejectConsent("Jendela ditutup oleh pengguna");
+                }
+                else if (_isApproved && !_isClosing)
+                {
+                    _isClosing = true;
+                    try { Console.WriteLine("{\"type\":\"end_session\"}"); } catch { }
+                }
+                try
+                {
+                    if (_stdinThread != null && _stdinThread.IsAlive)
+                    {
+                        _stdinThread.Abort();
+                    }
+                }
+                catch { }
+            };
+        }
+
+        private static Button CreateModernButton(string text, string bgHex, string fgHex, string borderHex, double radius, double height, double fontSize, bool bold)
+        {
+            Button btn = new Button
+            {
+                Content = text,
+                Height = height,
+                FontSize = fontSize,
+                FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
+                Cursor = Cursors.Hand,
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString(bgHex),
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString(fgHex),
+                BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString(borderHex),
+                BorderThickness = new Thickness(1),
+                FocusVisualStyle = null
+            };
+
+            ControlTemplate template = new ControlTemplate(typeof(Button));
+            FrameworkElementFactory border = new FrameworkElementFactory(typeof(Border));
+            border.Name = "bd";
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(radius));
+            border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+            border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Button.BorderBrushProperty));
+            border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Button.BorderThicknessProperty));
+
+            FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            cp.SetValue(ContentPresenter.MarginProperty, new Thickness(4, 0, 4, 0));
+            border.AppendChild(cp);
+            template.VisualTree = border;
+
+            btn.Template = template;
+            return btn;
+        }
+
+        private void AnimateIsland(double targetWinWidth, double targetWinHeight, double cornerRadius, Action onCompleted)
+        {
+            Rect workArea = SystemParameters.WorkArea;
+            double currentCenterX = this.Left + (this.Width / 2.0);
+            double defaultCenterX = workArea.Left + (workArea.Width / 2.0);
+            double targetCenterX = Math.Abs(currentCenterX - defaultCenterX) > 30 ? currentCenterX : defaultCenterX;
+            double targetLeft = targetCenterX - (targetWinWidth / 2.0);
+            if (targetLeft < workArea.Left + 8) targetLeft = workArea.Left + 8;
+            if (targetLeft + targetWinWidth > workArea.Right - 8) targetLeft = workArea.Right - 8 - targetWinWidth;
+            double targetTop = workArea.Top + 10;
+
+            Duration dur = new Duration(TimeSpan.FromMilliseconds(260));
+            IEasingFunction ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+            DoubleAnimation animW = new DoubleAnimation(this.Width, targetWinWidth, dur) { EasingFunction = ease };
+            DoubleAnimation animH = new DoubleAnimation(this.Height, targetWinHeight, dur) { EasingFunction = ease };
+            DoubleAnimation animL = new DoubleAnimation(this.Left, targetLeft, dur) { EasingFunction = ease };
+            DoubleAnimation animT = new DoubleAnimation(this.Top, targetTop, dur) { EasingFunction = ease };
+
+            if (_islandBorder != null)
+            {
+                _islandBorder.CornerRadius = new CornerRadius(cornerRadius);
+            }
+
+            int completed = 0;
+            EventHandler handler = null;
+            handler = delegate
+            {
+                completed++;
+                if (completed >= 4)
+                {
+                    this.BeginAnimation(Window.WidthProperty, null);
+                    this.BeginAnimation(Window.HeightProperty, null);
+                    this.BeginAnimation(Window.LeftProperty, null);
+                    this.BeginAnimation(Window.TopProperty, null);
+
+                    this.Width = targetWinWidth;
+                    this.Height = targetWinHeight;
+                    this.Left = targetLeft;
+                    this.Top = targetTop;
+
+                    if (onCompleted != null) onCompleted();
                 }
             };
+
+            animW.Completed += handler;
+            animH.Completed += handler;
+            animL.Completed += handler;
+            animT.Completed += handler;
+
+            this.BeginAnimation(Window.WidthProperty, animW);
+            this.BeginAnimation(Window.HeightProperty, animH);
+            this.BeginAnimation(Window.LeftProperty, animL);
+            this.BeginAnimation(Window.TopProperty, animT);
+        }
+
+        private static string FormatDuration(int totalSeconds)
+        {
+            int h = totalSeconds / 3600;
+            int m = (totalSeconds % 3600) / 60;
+            int s = totalSeconds % 60;
+            return string.Format("{0:D2}:{1:D2}:{2:D2}", h, m, s);
         }
 
         private string FormatTimeout(int seconds)
@@ -1668,7 +1847,698 @@ namespace ProjectR.Agent.Manager
             return string.Format("{0} detik", s);
         }
 
-        private void BuildConsentUI()
+        private void StartCountdown()
+        {
+            _countdownTimer = new System.Windows.Threading.DispatcherTimer();
+            _countdownTimer.Interval = TimeSpan.FromSeconds(1);
+            _countdownTimer.Tick += delegate
+            {
+                _timeoutRemaining--;
+                if (_lblCountdown != null)
+                {
+                    _lblCountdown.Text = "⏱️ Waktu konfirmasi tersisa: " + FormatTimeout(_timeoutRemaining);
+                }
+                if (_pbCountdown != null)
+                {
+                    _pbCountdown.Value = _timeoutRemaining;
+                }
+                if (_timeoutRemaining <= 0)
+                {
+                    _countdownTimer.Stop();
+                    RejectConsent("Waktu persetujuan habis (timeout 2 menit)");
+                }
+            };
+            _countdownTimer.Start();
+        }
+
+        private void StartSessionStopwatch()
+        {
+            _sessionStopwatch = new System.Windows.Threading.DispatcherTimer();
+            _sessionStopwatch.Interval = TimeSpan.FromSeconds(1);
+            _sessionStopwatch.Tick += delegate
+            {
+                _sessionSeconds++;
+                if (_lblTimer != null)
+                {
+                    _lblTimer.Text = FormatDuration(_sessionSeconds);
+                }
+            };
+            _sessionStopwatch.Start();
+        }
+
+        private void StartStdinThread()
+        {
+            _stdinThread = new Thread(ReadStdinLoop);
+            _stdinThread.IsBackground = true;
+            _stdinThread.Start();
+        }
+
+        private void AcceptConsent()
+        {
+            if (_isApproved) return;
+            _isApproved = true;
+
+            if (_countdownTimer != null)
+            {
+                _countdownTimer.Stop();
+                _countdownTimer = null;
+            }
+
+            Console.WriteLine("{\"type\":\"consent_result\",\"approved\":true}");
+
+            if (_isModernMode)
+            {
+                _islandBorder.Child = null;
+                AnimateIsland(376, 60, 22, delegate
+                {
+                    BuildModernCompactPillUI();
+                });
+                StartSessionStopwatch();
+                StartStdinThread();
+            }
+            else
+            {
+                BuildLegacyDockedUI();
+                StartSessionStopwatch();
+                StartStdinThread();
+            }
+        }
+
+        private void RejectConsent(string reason)
+        {
+            if (_isApproved || _isClosing) return;
+            _isClosing = true;
+
+            if (_countdownTimer != null)
+            {
+                try { _countdownTimer.Stop(); } catch { }
+                _countdownTimer = null;
+            }
+
+            string jsonReason = EscapeJson(reason);
+            try { Console.WriteLine("{\"type\":\"consent_result\",\"approved\":false,\"reason\":\"" + jsonReason + "\"}"); } catch { }
+            try { this.Close(); } catch { }
+        }
+
+        #region Modern Dynamic Island Implementation (Windows 10/11)
+
+        private void BuildModernConsentUI()
+        {
+            _islandBorder.BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#27272a");
+            _islandBorder.CornerRadius = new CornerRadius(22);
+
+            Grid root = new Grid { Margin = new Thickness(20, 16, 20, 16) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Header & drag indicator
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Admin identity card
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Privacy note
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Progress & countdown
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Buttons
+
+            // 1. Header Row: Icon + Title
+            Grid headerGrid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            Border iconBorder = new Border
+            {
+                Width = 38,
+                Height = 38,
+                CornerRadius = new CornerRadius(19),
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#064e3b"),
+                BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#059669"),
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 0, 12, 0)
+            };
+            TextBlock iconText = new TextBlock
+            {
+                Text = "🖥️",
+                FontSize = 17,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            iconBorder.Child = iconText;
+            Grid.SetColumn(iconBorder, 0);
+
+            StackPanel titleStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            TextBlock titleText = new TextBlock
+            {
+                Text = "Permintaan Remote Desktop",
+                FontSize = 14.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White
+            };
+            TextBlock subText = new TextBlock
+            {
+                Text = "Bantuan Teknis Langsung • Project R ITAM & MDM",
+                FontSize = 11,
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString("#a1a1aa"),
+                Margin = new Thickness(0, 2, 0, 0)
+            };
+            titleStack.Children.Add(titleText);
+            titleStack.Children.Add(subText);
+            Grid.SetColumn(titleStack, 1);
+
+            headerGrid.Children.Add(iconBorder);
+            headerGrid.Children.Add(titleStack);
+            Grid.SetRow(headerGrid, 0);
+            root.Children.Add(headerGrid);
+
+            // 2. Admin Identity Card
+            Border adminCard = new Border
+            {
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#18181b"),
+                BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#27272a"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(12, 10, 12, 10),
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            Grid adminGrid = new Grid();
+            adminGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            adminGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            StackPanel adminStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            TextBlock lblName = new TextBlock
+            {
+                Text = _adminName,
+                FontSize = 13.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White
+            };
+            TextBlock lblDesc = new TextBlock
+            {
+                Text = "Meminta izin akses kendali mouse, keyboard & layar",
+                FontSize = 10.5,
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString("#94a3b8"),
+                Margin = new Thickness(0, 2, 0, 0)
+            };
+            adminStack.Children.Add(lblName);
+            adminStack.Children.Add(lblDesc);
+            Grid.SetColumn(adminStack, 0);
+
+            Border roleBadge = new Border
+            {
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#064e3b"),
+                BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#059669"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(8, 3, 8, 3),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            TextBlock lblRole = new TextBlock
+            {
+                Text = _adminRole,
+                FontSize = 10.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString("#34d399")
+            };
+            roleBadge.Child = lblRole;
+            Grid.SetColumn(roleBadge, 1);
+
+            adminGrid.Children.Add(adminStack);
+            adminGrid.Children.Add(roleBadge);
+            adminCard.Child = adminGrid;
+            Grid.SetRow(adminCard, 1);
+            root.Children.Add(adminCard);
+
+            // 3. Privacy & Security Note
+            Border privCard = new Border
+            {
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#111827"),
+                BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#1f2937"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 8, 10, 8),
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            TextBlock privText = new TextBlock
+            {
+                Text = "🔒 Admin IT dapat melihat tampilan layar dan membantu kendali jarak jauh. Anda memegang kendali penuh dan dapat memutuskan sesi kapan saja.",
+                FontSize = 11,
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString("#cbd5e1"),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 15
+            };
+            privCard.Child = privText;
+            Grid.SetRow(privCard, 2);
+            root.Children.Add(privCard);
+
+            // 4. Countdown & Progress
+            StackPanel cdStack = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
+            _lblCountdown = new TextBlock
+            {
+                Text = "⏱️ Waktu konfirmasi tersisa: " + FormatTimeout(_timeoutRemaining),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString("#fbbf24"),
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            _pbCountdown = new ProgressBar
+            {
+                Height = 4,
+                Maximum = _timeoutRemaining,
+                Value = _timeoutRemaining,
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#27272a"),
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString("#10b981"),
+                BorderThickness = new Thickness(0)
+            };
+            cdStack.Children.Add(_lblCountdown);
+            cdStack.Children.Add(_pbCountdown);
+            Grid.SetRow(cdStack, 3);
+            root.Children.Add(cdStack);
+
+            // 5. Action Buttons (Modern Capsule)
+            Grid btnGrid = new Grid();
+            btnGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            btnGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.3, GridUnitType.Star) });
+
+            Button btnReject = CreateModernButton("✕  Tolak", "#27272a", "#f87171", "#ef4444", 19, 38, 12, true);
+            btnReject.Margin = new Thickness(0, 0, 6, 0);
+            btnReject.Click += delegate { RejectConsent("Ditolak oleh pengguna klien"); };
+            Grid.SetColumn(btnReject, 0);
+
+            Button btnAccept = CreateModernButton("✓  Izinkan", "#059669", "#ffffff", "#10b981", 19, 38, 12.5, true);
+            btnAccept.Margin = new Thickness(6, 0, 0, 0);
+            btnAccept.Click += delegate { AcceptConsent(); };
+            Grid.SetColumn(btnAccept, 1);
+
+            btnGrid.Children.Add(btnReject);
+            btnGrid.Children.Add(btnAccept);
+            Grid.SetRow(btnGrid, 4);
+            root.Children.Add(btnGrid);
+
+            _islandBorder.Child = root;
+        }
+
+        private void BuildModernCompactPillUI()
+        {
+            _islandBorder.BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#10b981");
+            _islandBorder.BorderThickness = new Thickness(1.2);
+            _islandBorder.CornerRadius = new CornerRadius(22);
+
+            Grid pillGrid = new Grid
+            {
+                Margin = new Thickness(12, 0, 8, 0),
+                Height = 44,
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = Cursors.SizeAll
+            };
+            pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Dot + Name + Timer
+            pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Spacer
+            pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Chat Button + Badge
+            pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Akhiri Button
+
+            // Status Stack: Pulse Dot + Admin Name + Timer
+            StackPanel leftStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            Ellipse pulseDot = new Ellipse
+            {
+                Width = 8,
+                Height = 8,
+                Fill = (SolidColorBrush)new BrushConverter().ConvertFromString("#22c55e"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 7, 0)
+            };
+            DoubleAnimation pulseAnim = new DoubleAnimation(1.0, 0.35, new Duration(TimeSpan.FromMilliseconds(750)))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+            pulseDot.BeginAnimation(UIElement.OpacityProperty, pulseAnim);
+            leftStack.Children.Add(pulseDot);
+
+            TextBlock lblAdmin = new TextBlock
+            {
+                Text = _adminName,
+                FontSize = 11.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                MaxWidth = 110,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            leftStack.Children.Add(lblAdmin);
+
+            TextBlock dotSep = new TextBlock
+            {
+                Text = " • ",
+                FontSize = 10,
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString("#52525b"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            leftStack.Children.Add(dotSep);
+
+            _lblTimer = new TextBlock
+            {
+                Text = FormatDuration(_sessionSeconds),
+                FontSize = 11,
+                FontFamily = new FontFamily("Consolas, Segoe UI"),
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString("#34d399"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            leftStack.Children.Add(_lblTimer);
+
+            Grid.SetColumn(leftStack, 0);
+            pillGrid.Children.Add(leftStack);
+
+            // Chat Button with Unread Badge
+            Grid chatGrid = new Grid
+            {
+                Margin = new Thickness(0, 0, 6, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Button btnChat = CreateModernButton("💬 Chat", "#18181b", "#38bdf8", "#3f3f46", 14, 28, 11, true);
+            btnChat.Padding = new Thickness(8, 0, 8, 0);
+            btnChat.Click += delegate { ExpandModernChat(); };
+            chatGrid.Children.Add(btnChat);
+
+            _unreadBadge = new Border
+            {
+                Width = 16,
+                Height = 16,
+                CornerRadius = new CornerRadius(8),
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#ef4444"),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, -4, -4, 0),
+                Visibility = _unreadCount > 0 ? Visibility.Visible : Visibility.Collapsed
+            };
+            _lblUnreadCount = new TextBlock
+            {
+                Text = _unreadCount.ToString(),
+                FontSize = 9,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _unreadBadge.Child = _lblUnreadCount;
+            chatGrid.Children.Add(_unreadBadge);
+
+            Grid.SetColumn(chatGrid, 2);
+            pillGrid.Children.Add(chatGrid);
+
+            // Akhiri Button
+            Button btnEnd = CreateModernButton("🔴 Akhiri", "#450a0a", "#f87171", "#dc2626", 14, 28, 11, true);
+            btnEnd.Padding = new Thickness(8, 0, 8, 0);
+            btnEnd.Click += delegate { ShowModernInlineEndConfirmation(); };
+            Grid.SetColumn(btnEnd, 3);
+            pillGrid.Children.Add(btnEnd);
+
+            _islandBorder.Child = pillGrid;
+        }
+
+        private void ExpandModernChat()
+        {
+            _isChatExpanded = true;
+            _unreadCount = 0;
+            if (_unreadBadge != null) _unreadBadge.Visibility = Visibility.Collapsed;
+
+            _islandBorder.Child = null;
+            AnimateIsland(416, 436, 24, delegate
+            {
+                BuildModernChatUI();
+            });
+        }
+
+        private void CollapseModernChat()
+        {
+            _isChatExpanded = false;
+
+            _islandBorder.Child = null;
+            AnimateIsland(376, 60, 22, delegate
+            {
+                BuildModernCompactPillUI();
+            });
+        }
+
+        private void BuildModernChatUI()
+        {
+            _islandBorder.BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#10b981");
+            _islandBorder.CornerRadius = new CornerRadius(24);
+
+            Grid chatGrid = new Grid();
+            chatGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(44) }); // Header
+            chatGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Messages
+            chatGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(52) }); // Input
+
+            // Header (Row 0)
+            Border headerBorder = new Border
+            {
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#18181b"),
+                CornerRadius = new CornerRadius(24, 24, 0, 0),
+                BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#27272a"),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(16, 0, 10, 0),
+                Cursor = Cursors.SizeAll
+            };
+            Grid headerGrid = new Grid();
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            StackPanel titleStack = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            Ellipse dot = new Ellipse
+            {
+                Width = 8,
+                Height = 8,
+                Fill = (SolidColorBrush)new BrushConverter().ConvertFromString("#22c55e"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            TextBlock chatTitle = new TextBlock
+            {
+                Text = "💬 Obrolan • " + _adminName,
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = 180,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            titleStack.Children.Add(dot);
+            titleStack.Children.Add(chatTitle);
+            Grid.SetColumn(titleStack, 0);
+
+            Button btnChatEnd = CreateModernButton("🔴", "#450a0a", "#f87171", "#dc2626", 12, 24, 10, true);
+            btnChatEnd.ToolTip = "Akhiri sesi remote desktop";
+            btnChatEnd.Margin = new Thickness(0, 0, 8, 0);
+            btnChatEnd.Click += delegate { ShowModernInlineEndConfirmation(); };
+            Grid.SetColumn(btnChatEnd, 1);
+
+            Button btnCollapse = CreateModernButton("▲", "#27272a", "#a1a1aa", "#3f3f46", 12, 24, 10, true);
+            btnCollapse.ToolTip = "Ciutkan ke Dynamic Island";
+            btnCollapse.Click += delegate { CollapseModernChat(); };
+            Grid.SetColumn(btnCollapse, 2);
+
+            headerGrid.Children.Add(titleStack);
+            headerGrid.Children.Add(btnChatEnd);
+            headerGrid.Children.Add(btnCollapse);
+            headerBorder.Child = headerGrid;
+            Grid.SetRow(headerBorder, 0);
+            chatGrid.Children.Add(headerBorder);
+
+            // Message List (Row 1)
+            _chatScrollViewer = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Padding = new Thickness(14, 10, 14, 10),
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#09090b")
+            };
+            if (_chatMessagesPanel == null)
+            {
+                _chatMessagesPanel = new StackPanel();
+                AddModernChatBubble("Sistem", "Sesi remote terhubung. Anda dapat berkirim pesan langsung dengan Admin IT di sini.", DateTime.Now.ToString("HH:mm"), false);
+            }
+            else
+            {
+                ScrollViewer oldSv = _chatMessagesPanel.Parent as ScrollViewer;
+                if (oldSv != null)
+                {
+                    oldSv.Content = null;
+                }
+            }
+            _chatScrollViewer.Content = _chatMessagesPanel;
+            Grid.SetRow(_chatScrollViewer, 1);
+            chatGrid.Children.Add(_chatScrollViewer);
+
+            // Input Bar (Row 2)
+            Border inputBorder = new Border
+            {
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#18181b"),
+                CornerRadius = new CornerRadius(0, 0, 24, 24),
+                BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#27272a"),
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                Padding = new Thickness(12, 8, 12, 8)
+            };
+            Grid inputGrid = new Grid();
+            inputGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            inputGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            _txtChatInput = new TextBox
+            {
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#27272a"),
+                Foreground = Brushes.White,
+                BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#3f3f46"),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(12, 6, 12, 6),
+                FontSize = 12,
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            _txtChatInput.KeyDown += delegate(object s, KeyEventArgs e)
+            {
+                if (e.Key == Key.Enter)
+                {
+                    SendClientChatMessage();
+                    e.Handled = true;
+                }
+            };
+            Grid.SetColumn(_txtChatInput, 0);
+
+            Button btnSend = CreateModernButton("Kirim", "#059669", "#ffffff", "#10b981", 16, 32, 11.5, true);
+            btnSend.Margin = new Thickness(8, 0, 0, 0);
+            btnSend.Padding = new Thickness(14, 0, 14, 0);
+            btnSend.Click += delegate { SendClientChatMessage(); };
+            Grid.SetColumn(btnSend, 1);
+
+            inputGrid.Children.Add(_txtChatInput);
+            inputGrid.Children.Add(btnSend);
+            inputBorder.Child = inputGrid;
+            Grid.SetRow(inputBorder, 2);
+            chatGrid.Children.Add(inputBorder);
+
+            _islandBorder.Child = chatGrid;
+
+            Dispatcher.BeginInvoke(new Action(delegate
+            {
+                if (_txtChatInput != null) _txtChatInput.Focus();
+                if (_chatScrollViewer != null) _chatScrollViewer.ScrollToEnd();
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        private void AddModernChatBubble(string sender, string text, string time, bool isClient)
+        {
+            Border bubble = new Border
+            {
+                CornerRadius = new CornerRadius(12, 12, isClient ? 2 : 12, isClient ? 12 : 2),
+                Background = (SolidColorBrush)new BrushConverter().ConvertFromString(isClient ? "#064e3b" : (sender == "Sistem" ? "#18181b" : "#1e293b")),
+                BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString(isClient ? "#059669" : (sender == "Sistem" ? "#27272a" : "#334155")),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(12, 7, 12, 7),
+                Margin = new Thickness(isClient ? 36 : 0, 4, isClient ? 0 : 36, 4),
+                HorizontalAlignment = isClient ? HorizontalAlignment.Right : (sender == "Sistem" ? HorizontalAlignment.Center : HorizontalAlignment.Left),
+                MaxWidth = 280
+            };
+
+            StackPanel sp = new StackPanel();
+            TextBlock header = new TextBlock
+            {
+                Text = sender + " • " + time,
+                FontSize = 9.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString(isClient ? "#a7f3d0" : (sender == "Sistem" ? "#94a3b8" : "#38bdf8")),
+                Margin = new Thickness(0, 0, 0, 3)
+            };
+            TextBlock body = new TextBlock
+            {
+                Text = text,
+                FontSize = 11.5,
+                Foreground = Brushes.White,
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 15.5
+            };
+            sp.Children.Add(header);
+            sp.Children.Add(body);
+            bubble.Child = sp;
+
+            if (_chatMessagesPanel != null)
+            {
+                _chatMessagesPanel.Children.Add(bubble);
+                if (_chatScrollViewer != null) _chatScrollViewer.ScrollToEnd();
+            }
+        }
+
+        private void ShowModernInlineEndConfirmation()
+        {
+            bool wasFromChat = _isChatExpanded;
+
+            _islandBorder.BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#ef4444");
+            _islandBorder.CornerRadius = new CornerRadius(22);
+
+            Grid confirmGrid = new Grid
+            {
+                Margin = new Thickness(14, 0, 8, 0),
+                Height = 44,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            confirmGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Prompt text
+            confirmGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Batal button
+            confirmGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Ya, Akhiri button
+
+            TextBlock lblPrompt = new TextBlock
+            {
+                Text = "Akhiri sesi remote?",
+                FontSize = 11.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = (SolidColorBrush)new BrushConverter().ConvertFromString("#fca5a5"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(lblPrompt, 0);
+            confirmGrid.Children.Add(lblPrompt);
+
+            Button btnCancel = CreateModernButton("Batal", "#27272a", "#a1a1aa", "#3f3f46", 14, 28, 11, true);
+            btnCancel.Padding = new Thickness(10, 0, 10, 0);
+            btnCancel.Margin = new Thickness(0, 0, 6, 0);
+            btnCancel.Click += delegate
+            {
+                if (wasFromChat)
+                {
+                    ExpandModernChat();
+                }
+                else
+                {
+                    BuildModernCompactPillUI();
+                }
+            };
+            Grid.SetColumn(btnCancel, 1);
+            confirmGrid.Children.Add(btnCancel);
+
+            Button btnConfirmEnd = CreateModernButton("Ya, Akhiri", "#dc2626", "#ffffff", "#ef4444", 14, 28, 11, true);
+            btnConfirmEnd.Padding = new Thickness(10, 0, 10, 0);
+            btnConfirmEnd.Click += delegate
+            {
+                _isClosing = true;
+                Console.WriteLine("{\"type\":\"end_session\"}");
+                this.Close();
+            };
+            Grid.SetColumn(btnConfirmEnd, 2);
+            confirmGrid.Children.Add(btnConfirmEnd);
+
+            if (_isChatExpanded)
+            {
+                _isChatExpanded = false;
+                _islandBorder.Child = null;
+                AnimateIsland(376, 60, 22, delegate
+                {
+                    _islandBorder.Child = confirmGrid;
+                });
+            }
+            else
+            {
+                _islandBorder.Child = confirmGrid;
+            }
+        }
+
+        #endregion
+
+        #region Legacy Window Implementation (Windows 7/8/8.1 Fallback)
+
+        private void BuildLegacyConsentUI()
         {
             _rootGrid.Children.Clear();
 
@@ -1886,65 +2756,7 @@ namespace ProjectR.Agent.Manager
             _rootGrid.Children.Add(_consentCard);
         }
 
-        private void StartCountdown()
-        {
-            _countdownTimer = new System.Windows.Threading.DispatcherTimer();
-            _countdownTimer.Interval = TimeSpan.FromSeconds(1);
-            _countdownTimer.Tick += delegate
-            {
-                _timeoutRemaining--;
-                if (_lblCountdown != null)
-                {
-                    _lblCountdown.Text = "⏱️ Waktu konfirmasi tersisa: " + FormatTimeout(_timeoutRemaining);
-                }
-                if (_pbCountdown != null)
-                {
-                    _pbCountdown.Value = _timeoutRemaining;
-                }
-                if (_timeoutRemaining <= 0)
-                {
-                    _countdownTimer.Stop();
-                    RejectConsent("Waktu persetujuan habis (timeout 2 menit)");
-                }
-            };
-            _countdownTimer.Start();
-        }
-
-        private void AcceptConsent()
-        {
-            if (_isApproved) return;
-            _isApproved = true;
-
-            if (_countdownTimer != null)
-            {
-                _countdownTimer.Stop();
-                _countdownTimer = null;
-            }
-
-            // Output JSON result to stdout for parent ProjectRRemoteAgent
-            Console.WriteLine("{\"type\":\"consent_result\",\"approved\":true}");
-
-            // Switch to Docked Mode in Bottom-Right
-            BuildDockedUI();
-        }
-
-        private void RejectConsent(string reason)
-        {
-            if (_isApproved || _isClosing) return;
-            _isClosing = true;
-
-            if (_countdownTimer != null)
-            {
-                try { _countdownTimer.Stop(); } catch { }
-                _countdownTimer = null;
-            }
-
-            string jsonReason = EscapeJson(reason);
-            try { Console.WriteLine("{\"type\":\"consent_result\",\"approved\":false,\"reason\":\"" + jsonReason + "\"}"); } catch { }
-            try { this.Close(); } catch { }
-        }
-
-        private void BuildDockedUI()
+        private void BuildLegacyDockedUI()
         {
             _rootGrid.Children.Clear();
             this.SizeToContent = SizeToContent.Manual;
@@ -2030,7 +2842,7 @@ namespace ProjectR.Agent.Manager
                 FontWeight = FontWeights.Bold,
                 Cursor = Cursors.Hand
             };
-            btnChat.Click += delegate { ToggleChatFlyout(); };
+            btnChat.Click += delegate { ToggleLegacyChatFlyout(); };
             chatBtnGrid.Children.Add(btnChat);
 
             _unreadBadge = new Border
@@ -2078,6 +2890,7 @@ namespace ProjectR.Agent.Manager
                 MessageBoxResult res = MessageBox.Show(this, "Akhiri sesi remote desktop dari admin IT sekarang?", "Konfirmasi", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 if (res == MessageBoxResult.Yes)
                 {
+                    _isClosing = true;
                     Console.WriteLine("{\"type\":\"end_session\"}");
                     this.Close();
                 }
@@ -2100,33 +2913,14 @@ namespace ProjectR.Agent.Manager
             };
             Grid.SetRow(_chatFlyout, 0);
 
-            BuildChatFlyoutContent();
+            BuildLegacyChatFlyoutContent();
 
             container.Children.Add(_chatFlyout);
             container.Children.Add(_dockCard);
             _rootGrid.Children.Add(container);
-
-            // Start Stopwatch
-            _sessionStopwatch = new System.Windows.Threading.DispatcherTimer();
-            _sessionStopwatch.Interval = TimeSpan.FromSeconds(1);
-            _sessionStopwatch.Tick += delegate
-            {
-                _sessionSeconds++;
-                TimeSpan t = TimeSpan.FromSeconds(_sessionSeconds);
-                if (_lblTimer != null)
-                {
-                    _lblTimer.Text = t.ToString(@"hh\:mm\:ss");
-                }
-            };
-            _sessionStopwatch.Start();
-
-            // Start Stdin Reader Thread
-            _stdinThread = new Thread(ReadStdinLoop);
-            _stdinThread.IsBackground = true;
-            _stdinThread.Start();
         }
 
-        private void BuildChatFlyoutContent()
+        private void BuildLegacyChatFlyoutContent()
         {
             Grid chatGrid = new Grid();
             chatGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(42) }); // Header
@@ -2161,7 +2955,7 @@ namespace ProjectR.Agent.Manager
                 VerticalAlignment = VerticalAlignment.Center,
                 Padding = new Thickness(8, 4, 8, 4)
             };
-            btnCloseChat.Click += delegate { ToggleChatFlyout(); };
+            btnCloseChat.Click += delegate { ToggleLegacyChatFlyout(); };
             headerGrid.Children.Add(chatTitle);
             headerGrid.Children.Add(btnCloseChat);
             headerBorder.Child = headerGrid;
@@ -2176,13 +2970,22 @@ namespace ProjectR.Agent.Manager
                 Padding = new Thickness(12, 10, 12, 10),
                 Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#141416")
             };
-            _chatMessagesPanel = new StackPanel();
+            if (_chatMessagesPanel == null)
+            {
+                _chatMessagesPanel = new StackPanel();
+                AddLegacyChatBubble("Sistem", "Sesi remote terhubung. Anda dapat berkirim pesan langsung dengan Admin IT di sini.", DateTime.Now.ToString("HH:mm"), false);
+            }
+            else
+            {
+                ScrollViewer oldSv = _chatMessagesPanel.Parent as ScrollViewer;
+                if (oldSv != null)
+                {
+                    oldSv.Content = null;
+                }
+            }
             _chatScrollViewer.Content = _chatMessagesPanel;
             Grid.SetRow(_chatScrollViewer, 1);
             chatGrid.Children.Add(_chatScrollViewer);
-
-            // Welcome bubble
-            AddChatBubble("Sistem", "Sesi remote terhubung. Anda dapat berkirim pesan langsung dengan Admin IT di sini.", DateTime.Now.ToString("HH:mm"), false);
 
             // Input Row
             Border inputBorder = new Border
@@ -2241,7 +3044,7 @@ namespace ProjectR.Agent.Manager
             _chatFlyout.Child = chatGrid;
         }
 
-        private void ToggleChatFlyout()
+        private void ToggleLegacyChatFlyout()
         {
             _isChatExpanded = !_isChatExpanded;
             Rect wa = SystemParameters.WorkArea;
@@ -2264,26 +3067,7 @@ namespace ProjectR.Agent.Manager
             }
         }
 
-        private void SendClientChatMessage()
-        {
-            if (_txtChatInput == null) return;
-            string text = _txtChatInput.Text.Trim();
-            if (string.IsNullOrEmpty(text)) return;
-
-            _txtChatInput.Text = "";
-            string now = DateTime.Now.ToString("HH:mm");
-
-            AddChatBubble("Anda", text, now, true);
-
-            string json = string.Format(
-                "{{\"type\":\"chat_message\",\"sender\":\"client\",\"sender_name\":\"Pengguna\",\"text\":\"{0}\",\"timestamp\":\"{1}\"}}",
-                EscapeJson(text),
-                now
-            );
-            Console.WriteLine(json);
-        }
-
-        private void AddChatBubble(string sender, string text, string time, bool isClient)
+        private void AddLegacyChatBubble(string sender, string text, string time, bool isClient)
         {
             Border bubble = new Border
             {
@@ -2319,8 +3103,39 @@ namespace ProjectR.Agent.Manager
             sp.Children.Add(body);
             bubble.Child = sp;
 
-            _chatMessagesPanel.Children.Add(bubble);
-            if (_chatScrollViewer != null) _chatScrollViewer.ScrollToEnd();
+            if (_chatMessagesPanel != null)
+            {
+                _chatMessagesPanel.Children.Add(bubble);
+                if (_chatScrollViewer != null) _chatScrollViewer.ScrollToEnd();
+            }
+        }
+
+        #endregion
+
+        private void SendClientChatMessage()
+        {
+            if (_txtChatInput == null) return;
+            string text = _txtChatInput.Text.Trim();
+            if (string.IsNullOrEmpty(text)) return;
+
+            _txtChatInput.Text = "";
+            string now = DateTime.Now.ToString("HH:mm");
+
+            if (_isModernMode)
+            {
+                AddModernChatBubble("Anda", text, now, true);
+            }
+            else
+            {
+                AddLegacyChatBubble("Anda", text, now, true);
+            }
+
+            string json = string.Format(
+                "{{\"type\":\"chat_message\",\"sender\":\"client\",\"sender_name\":\"Pengguna\",\"text\":\"{0}\",\"timestamp\":\"{1}\"}}",
+                EscapeJson(text),
+                now
+            );
+            Console.WriteLine(json);
         }
 
         private void ReadStdinLoop()
@@ -2346,9 +3161,16 @@ namespace ProjectR.Agent.Manager
                             string text = dict.ContainsKey("text") ? dict["text"].ToString() : "";
                             string time = dict.ContainsKey("timestamp") ? dict["timestamp"].ToString() : DateTime.Now.ToString("HH:mm");
 
-                            Dispatcher.Invoke(new Action(() =>
+                            Dispatcher.Invoke(new Action(delegate
                             {
-                                AddChatBubble(senderName, text, time, false);
+                                if (_isModernMode)
+                                {
+                                    AddModernChatBubble(senderName, text, time, false);
+                                }
+                                else
+                                {
+                                    AddLegacyChatBubble(senderName, text, time, false);
+                                }
                                 try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
 
                                 if (!_isChatExpanded)
@@ -2364,7 +3186,7 @@ namespace ProjectR.Agent.Manager
                         }
                         else if (type == "session_ended")
                         {
-                            Dispatcher.Invoke(new Action(() =>
+                            Dispatcher.Invoke(new Action(delegate
                             {
                                 this.Close();
                             }));

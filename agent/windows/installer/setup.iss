@@ -6,7 +6,7 @@
 #ifndef AppArch
   #define AppArch "x64"
 #endif
-#define MyAppVersion "2.4.9"
+#define MyAppVersion "2.5.0"
 
 [Setup]
 AppId={{D8C8431E-2B60-4E38-B7D4-95C7A9075D1E}

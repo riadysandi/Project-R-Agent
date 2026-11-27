@@ -43,7 +43,7 @@ namespace ProjectR.Agent.Common
 
     public class AgentConfig
     {
-        public const string CurrentVersion = "2.4.9";
+        public const string CurrentVersion = "2.5.0";
 
         public string ServerUrl { get; set; }
         public string Token { get; set; }
