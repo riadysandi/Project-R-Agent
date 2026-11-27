@@ -1581,6 +1581,9 @@ namespace ProjectR.Agent.Manager
 
         // Modern Dynamic Island UI elements
         private Border _islandBorder;
+        private bool _isDraggingHoriz = false;
+        private double _dragStartScreenX = 0;
+        private double _dragStartWinLeft = 0;
 
         // Legacy UI elements
         private Border _consentCard;
@@ -1609,8 +1612,17 @@ namespace ProjectR.Agent.Manager
             this.Title = "Project R - Remote Desktop Session";
             this.FontFamily = new FontFamily("Segoe UI, -apple-system, sans-serif");
             this.WindowStyle = WindowStyle.None;
+            this.ResizeMode = ResizeMode.NoResize;
             this.Topmost = true;
             this.WindowStartupLocation = WindowStartupLocation.Manual;
+
+            this.StateChanged += delegate
+            {
+                if (this.WindowState != WindowState.Normal)
+                {
+                    this.WindowState = WindowState.Normal;
+                }
+            };
 
             Rect workArea = SystemParameters.WorkArea;
 
@@ -1621,10 +1633,21 @@ namespace ProjectR.Agent.Manager
                 this.ShowInTaskbar = false;
                 this.BorderThickness = new Thickness(0);
 
+                this.MaxWidth = 460;
+                this.MaxHeight = 460;
                 this.Width = 446;
-                this.Height = 356;
+                this.Height = 346;
                 this.Left = workArea.Left + (workArea.Width - 446) / 2.0;
-                this.Top = workArea.Top + 10;
+                this.Top = workArea.Top;
+
+                this.LocationChanged += delegate
+                {
+                    double lockedTop = SystemParameters.WorkArea.Top;
+                    if (Math.Abs(this.Top - lockedTop) > 0.5)
+                    {
+                        this.Top = lockedTop;
+                    }
+                };
 
                 _rootGrid = new Grid();
                 _rootGrid.Background = null;
@@ -1634,9 +1657,9 @@ namespace ProjectR.Agent.Manager
                 {
                     Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#09090b"),
                     BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#27272a"),
-                    BorderThickness = new Thickness(1.2),
-                    CornerRadius = new CornerRadius(22),
-                    Margin = new Thickness(8),
+                    BorderThickness = new Thickness(1.2, 0, 1.2, 1.2),
+                    CornerRadius = new CornerRadius(0, 0, 20, 20),
+                    Margin = new Thickness(10, 0, 10, 10),
                     Effect = new DropShadowEffect
                     {
                         Color = Colors.Black,
@@ -1648,9 +1671,35 @@ namespace ProjectR.Agent.Manager
                 };
                 _islandBorder.MouseLeftButtonDown += delegate(object s, MouseButtonEventArgs e)
                 {
-                    if (e.ButtonState == MouseButtonState.Pressed)
+                    if (e.ButtonState == MouseButtonState.Pressed && IsDraggableSurface(e.OriginalSource as DependencyObject))
                     {
-                        try { this.DragMove(); } catch { }
+                        _isDraggingHoriz = true;
+                        _dragStartScreenX = this.PointToScreen(e.GetPosition(this)).X;
+                        _dragStartWinLeft = this.Left;
+                        _islandBorder.CaptureMouse();
+                    }
+                };
+                _islandBorder.MouseMove += delegate(object s, MouseEventArgs e)
+                {
+                    if (_isDraggingHoriz && e.LeftButton == MouseButtonState.Pressed)
+                    {
+                        Rect wa = SystemParameters.WorkArea;
+                        double curScreenX = this.PointToScreen(e.GetPosition(this)).X;
+                        double nextLeft = _dragStartWinLeft + (curScreenX - _dragStartScreenX);
+                        double minLeft = wa.Left + 8;
+                        double maxLeft = wa.Right - this.Width - 8;
+                        if (nextLeft < minLeft) nextLeft = minLeft;
+                        if (nextLeft > maxLeft) nextLeft = maxLeft;
+                        this.Left = nextLeft;
+                        this.Top = wa.Top;
+                    }
+                };
+                _islandBorder.MouseLeftButtonUp += delegate
+                {
+                    if (_isDraggingHoriz)
+                    {
+                        _isDraggingHoriz = false;
+                        if (_islandBorder.IsMouseCaptured) _islandBorder.ReleaseMouseCapture();
                     }
                 };
                 _rootGrid.Children.Add(_islandBorder);
@@ -1686,7 +1735,7 @@ namespace ProjectR.Agent.Manager
                     Rect wa = SystemParameters.WorkArea;
                     if (_isModernMode)
                     {
-                        this.Top = wa.Top + 10;
+                        this.Top = wa.Top;
                         this.Left = wa.Left + (wa.Width - this.ActualWidth) / 2.0;
                     }
                     else
@@ -1771,6 +1820,27 @@ namespace ProjectR.Agent.Manager
             return btn;
         }
 
+        private static bool IsDraggableSurface(DependencyObject source)
+        {
+            DependencyObject cur = source;
+            while (cur != null)
+            {
+                if (cur is System.Windows.Controls.Primitives.ButtonBase || cur is TextBox || cur is ScrollViewer)
+                {
+                    return false;
+                }
+                if (cur is System.Windows.Media.Visual || cur is System.Windows.Media.Media3D.Visual3D)
+                {
+                    cur = VisualTreeHelper.GetParent(cur);
+                }
+                else
+                {
+                    cur = LogicalTreeHelper.GetParent(cur);
+                }
+            }
+            return true;
+        }
+
         private void AnimateIsland(double targetWinWidth, double targetWinHeight, double cornerRadius, Action onCompleted)
         {
             Rect workArea = SystemParameters.WorkArea;
@@ -1780,7 +1850,7 @@ namespace ProjectR.Agent.Manager
             double targetLeft = targetCenterX - (targetWinWidth / 2.0);
             if (targetLeft < workArea.Left + 8) targetLeft = workArea.Left + 8;
             if (targetLeft + targetWinWidth > workArea.Right - 8) targetLeft = workArea.Right - 8 - targetWinWidth;
-            double targetTop = workArea.Top + 10;
+            double targetTop = workArea.Top;
 
             Duration dur = new Duration(TimeSpan.FromMilliseconds(260));
             IEasingFunction ease = new CubicEase { EasingMode = EasingMode.EaseOut };
@@ -1792,7 +1862,7 @@ namespace ProjectR.Agent.Manager
 
             if (_islandBorder != null)
             {
-                _islandBorder.CornerRadius = new CornerRadius(cornerRadius);
+                _islandBorder.CornerRadius = new CornerRadius(0, 0, cornerRadius, cornerRadius);
             }
 
             int completed = 0;
@@ -1909,7 +1979,7 @@ namespace ProjectR.Agent.Manager
             if (_isModernMode)
             {
                 _islandBorder.Child = null;
-                AnimateIsland(376, 60, 22, delegate
+                AnimateIsland(376, 54, 20, delegate
                 {
                     BuildModernCompactPillUI();
                 });
@@ -1945,7 +2015,7 @@ namespace ProjectR.Agent.Manager
         private void BuildModernConsentUI()
         {
             _islandBorder.BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#27272a");
-            _islandBorder.CornerRadius = new CornerRadius(22);
+            _islandBorder.CornerRadius = new CornerRadius(0, 0, 20, 20);
 
             Grid root = new Grid { Margin = new Thickness(20, 16, 20, 16) };
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Header & drag indicator
@@ -2133,15 +2203,15 @@ namespace ProjectR.Agent.Manager
         private void BuildModernCompactPillUI()
         {
             _islandBorder.BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#10b981");
-            _islandBorder.BorderThickness = new Thickness(1.2);
-            _islandBorder.CornerRadius = new CornerRadius(22);
+            _islandBorder.BorderThickness = new Thickness(1.2, 0, 1.2, 1.2);
+            _islandBorder.CornerRadius = new CornerRadius(0, 0, 20, 20);
 
             Grid pillGrid = new Grid
             {
                 Margin = new Thickness(12, 0, 8, 0),
                 Height = 44,
                 VerticalAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.SizeAll
+                Cursor = Cursors.SizeWE
             };
             pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Dot + Name + Timer
             pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Spacer
@@ -2259,7 +2329,7 @@ namespace ProjectR.Agent.Manager
             if (_unreadBadge != null) _unreadBadge.Visibility = Visibility.Collapsed;
 
             _islandBorder.Child = null;
-            AnimateIsland(416, 436, 24, delegate
+            AnimateIsland(416, 430, 22, delegate
             {
                 BuildModernChatUI();
             });
@@ -2270,7 +2340,7 @@ namespace ProjectR.Agent.Manager
             _isChatExpanded = false;
 
             _islandBorder.Child = null;
-            AnimateIsland(376, 60, 22, delegate
+            AnimateIsland(376, 54, 20, delegate
             {
                 BuildModernCompactPillUI();
             });
@@ -2279,7 +2349,7 @@ namespace ProjectR.Agent.Manager
         private void BuildModernChatUI()
         {
             _islandBorder.BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#10b981");
-            _islandBorder.CornerRadius = new CornerRadius(24);
+            _islandBorder.CornerRadius = new CornerRadius(0, 0, 22, 22);
 
             Grid chatGrid = new Grid();
             chatGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(44) }); // Header
@@ -2290,11 +2360,11 @@ namespace ProjectR.Agent.Manager
             Border headerBorder = new Border
             {
                 Background = (SolidColorBrush)new BrushConverter().ConvertFromString("#18181b"),
-                CornerRadius = new CornerRadius(24, 24, 0, 0),
+                CornerRadius = new CornerRadius(0),
                 BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#27272a"),
                 BorderThickness = new Thickness(0, 0, 0, 1),
                 Padding = new Thickness(16, 0, 10, 0),
-                Cursor = Cursors.SizeAll
+                Cursor = Cursors.SizeWE
             };
             Grid headerGrid = new Grid();
             headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -2468,7 +2538,7 @@ namespace ProjectR.Agent.Manager
             bool wasFromChat = _isChatExpanded;
 
             _islandBorder.BorderBrush = (SolidColorBrush)new BrushConverter().ConvertFromString("#ef4444");
-            _islandBorder.CornerRadius = new CornerRadius(22);
+            _islandBorder.CornerRadius = new CornerRadius(0, 0, 20, 20);
 
             Grid confirmGrid = new Grid
             {
@@ -2523,7 +2593,7 @@ namespace ProjectR.Agent.Manager
             {
                 _isChatExpanded = false;
                 _islandBorder.Child = null;
-                AnimateIsland(376, 60, 22, delegate
+                AnimateIsland(376, 54, 20, delegate
                 {
                     _islandBorder.Child = confirmGrid;
                 });
