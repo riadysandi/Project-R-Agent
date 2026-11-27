@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -68,6 +69,40 @@ public class MdmPolicyManager {
         } catch (Exception e) {
             Log.w(TAG, "Failed checking isProfileOwnerApp: " + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Grants fine/coarse location permissions via Device Owner only if not already granted,
+     * preventing Android 12+ Settings from repeatedly firing "Location can be accessed" notifications.
+     */
+    public static void ensureLocationPermissionsGrantedIfNeeded(
+            Context context,
+            DevicePolicyManager dpm,
+            ComponentName adminComponent
+    ) {
+        if (context == null || dpm == null || adminComponent == null) return;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+
+        String pkg = context.getPackageName();
+        if (!isDeviceOwner(dpm, pkg)) return;
+
+        String[] locationPermissions = new String[] {
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION
+        };
+        for (String permission : locationPermissions) {
+            try {
+                int grantState = dpm.getPermissionGrantState(adminComponent, pkg, permission);
+                int runtimeState = context.checkSelfPermission(permission);
+                if (grantState != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                        && runtimeState != PackageManager.PERMISSION_GRANTED) {
+                    dpm.setPermissionGrantState(adminComponent, pkg, permission,
+                            DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Failed checking/granting " + permission + ": " + e.getMessage());
+            }
         }
     }
 
@@ -244,18 +279,9 @@ public class MdmPolicyManager {
             Log.w(TAG, "Aplikasi hanya berstatus Device Admin (bukan Device Owner). Pada Android 10+ (targetSdk 35), setCameraDisabled dan UserRestrictions memerlukan Device Owner.");
         }
 
-        // Auto-grant location permissions when Device Owner
-        if (isDeviceOwner && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            try {
-                dpm.setPermissionGrantState(adminComponent, pkg,
-                        android.Manifest.permission.ACCESS_FINE_LOCATION,
-                        DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
-                dpm.setPermissionGrantState(adminComponent, pkg,
-                        android.Manifest.permission.ACCESS_COARSE_LOCATION,
-                        DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
-            } catch (Exception e) {
-                Log.w(TAG, "Failed auto-granting location permissions: " + e.getMessage());
-            }
+        // Auto-grant location permissions when Device Owner (only if not already granted)
+        if (isDeviceOwner) {
+            ensureLocationPermissionsGrantedIfNeeded(context, dpm, adminComponent);
         }
 
         // Enforce UserRestrictions (Device Owner / Profile Owner only)
@@ -287,7 +313,9 @@ public class MdmPolicyManager {
                 forceGps);
         if (forceGps && isDeviceOwner && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
-                dpm.setLocationEnabled(adminComponent, true);
+                if (!isLocationEnabled(context)) {
+                    dpm.setLocationEnabled(adminComponent, true);
+                }
             } catch (Exception e) {
                 Log.w(TAG, "setLocationEnabled(true) failed: " + e.getMessage());
                 if (forceGpsErr == null) forceGpsErr = e.getMessage();

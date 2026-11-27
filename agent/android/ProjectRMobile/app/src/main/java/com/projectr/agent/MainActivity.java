@@ -112,8 +112,7 @@ public class MainActivity extends AppCompatActivity {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     dpm.setUninstallBlocked(admin, getPackageName(), true);
                 }
-                dpm.setPermissionGrantState(admin, getPackageName(), android.Manifest.permission.ACCESS_FINE_LOCATION, android.app.admin.DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
-                dpm.setPermissionGrantState(admin, getPackageName(), android.Manifest.permission.ACCESS_COARSE_LOCATION, android.app.admin.DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+                MdmPolicyManager.ensureLocationPermissionsGrantedIfNeeded(this, dpm, admin);
             }
         } catch (Exception ignored) {}
 

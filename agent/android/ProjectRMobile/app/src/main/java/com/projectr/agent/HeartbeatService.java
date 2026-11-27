@@ -21,7 +21,7 @@ import java.util.concurrent.Executors;
 
 public class HeartbeatService extends Service {
     private static final String TAG = "ProjectRHeartbeat";
-    private static final String CHANNEL_ID = "project_r_guardian_channel";
+    private static final String CHANNEL_ID = "project_r_guardian_silent_v2";
     public static final String ACTION_SYNC_NOW = "com.projectr.agent.ACTION_SYNC_NOW";
     public static final String PREF_LAST_HEARTBEAT_ATTEMPT_MS = "last_heartbeat_attempt_ms";
     public static final String PREF_LAST_HEARTBEAT_SUCCESS_MS = "last_heartbeat_success_ms";
@@ -49,7 +49,7 @@ public class HeartbeatService extends Service {
                 .setContentTitle("Project R Guardian")
                 .setContentText("Detak jantung aktif terhubung ke SecOps")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setOngoing(false)
                 .setOnlyAlertOnce(true)
                 .setAutoCancel(false)
@@ -202,7 +202,7 @@ public class HeartbeatService extends Service {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
                     "Project R Guardian Service",
-                    NotificationManager.IMPORTANCE_LOW
+                    NotificationManager.IMPORTANCE_MIN
             );
             channel.setDescription("Layanan latar belakang detak jantung dan keamanan aset");
             NotificationManager manager = getSystemService(NotificationManager.class);
